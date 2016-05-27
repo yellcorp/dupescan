@@ -3,6 +3,7 @@
 import dupelib
 
 import argparse
+import itertools
 import os
 
 
@@ -56,10 +57,10 @@ def get_arg_parser():
     return p
 
 
-def handle_dupe_set(dupe_set, hardlink_info=True):
-    # TODO: autoselecting, like --prefer in the old one
+SELECTION_MARKER_UNIQUE =    ">"
+SELECTION_MARKER_NONUNIQUE = "*"
+def handle_dupe_set(dupe_set, hardlink_info=True, selector=None):
     file_size = os.stat(dupe_set[0].path()).st_size
-    selected = None
 
     print("## Size: {file_size} Instances: {inst_count} Excess: {excess_size} Names: {name_count}".format(
         inst_count=len(dupe_set),
@@ -67,6 +68,23 @@ def handle_dupe_set(dupe_set, hardlink_info=True):
         file_size=dupelib.format_file_size(file_size),
         excess_size=dupelib.format_file_size(file_size * (len(dupe_set) - 1))
     ))
+
+    selected_paths = set()
+    selected_instances = set()
+    if selector is not None:
+        all_names = itertools.chain(instance.paths for instance in dupe_set) 
+        try:
+            selected_paths.update(selector.pick(all_names))
+            for instance in selected_instances:
+                if len(selected_paths.intersection(instance.paths)) > 0:
+                    selected_instances.add(instance)
+        except EnvironmentError as ee:
+            print("## Skipping selection due to error: {!s}".format(ee))
+
+    if len(selected_instances) == 1:
+        keep_marker = SELECTION_MARKER_UNIQUE
+    else:
+        keep_marker = SELECTION_MARKER_NONUNIQUE
 
     instance_header = hardlink_info
     for index, instance in enumerate(sorted(dupe_set, key=lambda i: len(i.paths), reverse=True)):
@@ -78,7 +96,7 @@ def handle_dupe_set(dupe_set, hardlink_info=True):
                 print("# Instance {}".format(index + 1))
         for path in sorted(instance.paths):
             print("{keep_marker} {path}".format(
-                keep_marker=">" if selected == instance else " ",
+                keep_marker=keep_marker if instance in selected_instances else " ",
                 path=path
             ))
     print()
@@ -88,8 +106,9 @@ def main():
     p = get_arg_parser()
     args = p.parse_args()
 
+    selector = None
     if args.autoselect:
-        raise NotImplementedError("--autoselect")
+        selector = dupelib.criteria.parse_selector(args.autoselect)
 
     if args.execute:
         raise NotImplementedError("--execute")
@@ -111,7 +130,7 @@ def main():
         error_cb="print_stderr",
         #log_cb="print_stderr"
     ):
-        handle_dupe_set(dupe_set, hardlinks=args.hardlinks)
+        handle_dupe_set(dupe_set, hardlinks=args.hardlinks, selector=selector)
 
 
 if __name__ == "__main__":
