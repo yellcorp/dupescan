@@ -119,7 +119,7 @@ def main():
         raise NotImplementedError("--zero")
 
     if args.symlinks:
-        raise NotImplementedError("--hardlinks")
+        raise NotImplementedError("--symlinks")
 
     if args.recurse:
         path_iterator = dupelib.walk.recurse_iterator(args.paths)
