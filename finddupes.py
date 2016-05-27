@@ -19,7 +19,7 @@ def get_arg_parser():
                 consider the contents of directories"""
     )
 
-    p.add_argument("-l", "--symlinks",
+    p.add_argument("-s", "--symlinks",
         action="store_true",
         help="""Include symlinks"""
     )
