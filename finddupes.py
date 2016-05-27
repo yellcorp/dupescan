@@ -65,8 +65,8 @@ def handle_dupe_set(dupe_set, hardlink_info=True, selector=None):
     print("## Size: {file_size} Instances: {inst_count} Excess: {excess_size} Names: {name_count}".format(
         inst_count=len(dupe_set),
         name_count=sum(len(instance.paths) for instance in dupe_set),
-        file_size=dupelib.format_file_size(file_size),
-        excess_size=dupelib.format_file_size(file_size * (len(dupe_set) - 1))
+        file_size=dupelib.unitformat.format_file_size(file_size),
+        excess_size=dupelib.unitformat.format_file_size(file_size * (len(dupe_set) - 1))
     ))
 
     selected_paths = set()
@@ -120,7 +120,7 @@ def main():
         raise NotImplementedError("--hardlinks")
 
     if args.recurse:
-        path_iterator = dupelib.recurse_iterator(args.paths)
+        path_iterator = dupelib.walk.recurse_iterator(args.paths)
     else:
         path_iterator = args.paths
 
@@ -130,7 +130,7 @@ def main():
         error_cb="print_stderr",
         #log_cb="print_stderr"
     ):
-        handle_dupe_set(dupe_set, hardlinks=args.hardlinks, selector=selector)
+        handle_dupe_set(dupe_set, hardlink_info=args.hardlinks, selector=selector)
 
 
 if __name__ == "__main__":
