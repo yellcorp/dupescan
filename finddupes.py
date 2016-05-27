@@ -77,7 +77,7 @@ def handle_dupe_set(dupe_set, hardlink_info=True, selector=None):
         all_names = itertools.chain(instance.paths for instance in dupe_set) 
         try:
             selected_paths.update(selector.pick(all_names))
-            for instance in selected_instances:
+            for instance in dupe_set:
                 if len(selected_paths.intersection(instance.paths)) > 0:
                     selected_instances.add(instance)
         except EnvironmentError as ee:
