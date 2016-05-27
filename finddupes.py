@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-from dupelib.unitformat import format_file_size
-from dupelib.walk import recurse_iterator
 import dupelib
 
 import argparse
@@ -66,8 +64,8 @@ def handle_dupe_set(dupe_set, hardlink_info=True):
     print("## Size: {file_size} Instances: {inst_count} Excess: {excess_size} Names: {name_count}".format(
         inst_count=len(dupe_set),
         name_count=sum(len(instance.paths) for instance in dupe_set),
-        file_size=format_file_size(file_size),
-        excess_size=format_file_size(file_size * (len(dupe_set) - 1))
+        file_size=dupelib.format_file_size(file_size),
+        excess_size=dupelib.format_file_size(file_size * (len(dupe_set) - 1))
     ))
 
     instance_header = hardlink_info
@@ -103,7 +101,7 @@ def main():
         raise NotImplementedError("--hardlinks")
 
     if args.recurse:
-        path_iterator = recurse_iterator(args.paths)
+        path_iterator = dupelib.recurse_iterator(args.paths)
     else:
         path_iterator = args.paths
 
