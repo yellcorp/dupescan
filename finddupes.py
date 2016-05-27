@@ -31,10 +31,12 @@ def get_arg_parser():
 
     p.add_argument("-h", "--hardlinks",
         action="store_true",
-        help="""Check for hardlinks. If this option is specified, hardlinks
-                will be preserved in selections made through the --prefer
-                option, be used to skip redundant content comparisons, and
-                information about them will appear in reports."""
+        help="""Check whether a single file has more than one name, which is
+                possible through hardlinks, as well as symlinks if the
+                --symlinks option is specified. This check is used to skip
+                redundant content comparisons, add extra information to
+                reports, and preserve all paths pointing to a selected file
+                when the --prefer option is used."""
     )
 
     p.add_argument("-r", "--recurse",
