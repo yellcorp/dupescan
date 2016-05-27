@@ -32,9 +32,9 @@ def get_arg_parser():
     p.add_argument("-h", "--hardlinks",
         action="store_true",
         help="""Check for hardlinks. If this option is specified, hardlinks
-                will be preserved in autoselect criteria, be used to skip
-                redundant content comparisons, and information about them will
-                appear in reports."""
+                will be preserved in selections made through the --prefer
+                option, be used to skip redundant content comparisons, and
+                information about them will appear in reports."""
     )
 
     p.add_argument("-r", "--recurse",
@@ -42,7 +42,7 @@ def get_arg_parser():
         help="""Recurse into subdirectories"""
     )
 
-    p.add_argument("-a", "--autoselect",
+    p.add_argument("-p", "--prefer",
         metavar="CRITERIA",
         help="""For each set of duplicate files, automatically select one
                 according to the provided criteria."""
@@ -107,8 +107,8 @@ def main():
     args = p.parse_args()
 
     selector = None
-    if args.autoselect:
-        selector = dupelib.criteria.parse_selector(args.autoselect)
+    if args.prefer:
+        selector = dupelib.criteria.parse_selector(args.prefer)
 
     if args.execute:
         raise NotImplementedError("--execute")
