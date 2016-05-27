@@ -29,7 +29,7 @@ def get_arg_parser():
         help="""Include zero-length files"""
     )
 
-    p.add_argument("-h", "--hardlinks",
+    p.add_argument("-a", "--aliases",
         action="store_true",
         help="""Check whether a single file has more than one name, which is
                 possible through hardlinks, as well as symlinks if the
@@ -128,11 +128,11 @@ def main():
 
     for dupe_set in dupelib.find_duplicate_files(
         path_iterator,
-        collect_inodes=args.hardlinks,
+        collect_inodes=args.aliases,
         error_cb="print_stderr",
         #log_cb="print_stderr"
     ):
-        handle_dupe_set(dupe_set, hardlink_info=args.hardlinks, selector=selector)
+        handle_dupe_set(dupe_set, hardlink_info=args.aliases, selector=selector)
 
 
 if __name__ == "__main__":
