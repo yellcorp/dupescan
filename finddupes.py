@@ -74,7 +74,7 @@ def handle_dupe_set(dupe_set, hardlink_info=True, selector=None):
     selected_paths = set()
     selected_instances = set()
     if selector is not None:
-        all_names = itertools.chain(instance.paths for instance in dupe_set) 
+        all_names = itertools.chain(*(instance.paths for instance in dupe_set))
         try:
             selected_paths.update(selector.pick(all_names))
             for instance in dupe_set:
