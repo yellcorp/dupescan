@@ -256,7 +256,7 @@ class SelectionRules(object):
             
             this_round = next_round
 
-        return this_round
+        return tuple(this_round)
 
 
 class Token(object):
