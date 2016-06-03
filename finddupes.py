@@ -9,45 +9,48 @@ import os
 
 def get_arg_parser():
     p = argparse.ArgumentParser(
-        description="Find files with identical content"
+        description="Find files with identical content."
     )
 
     p.add_argument("paths",
         nargs="*",
         metavar="PATH",
         help="""List of files to consider. Specify --recurse (-r) to also
-                consider the contents of directories"""
+                consider the contents of directories."""
     )
 
     p.add_argument("-s", "--symlinks",
         action="store_true",
-        help="""Include symlinks"""
+        help="""Include symlinks."""
     )
 
     p.add_argument("-z", "--zero",
         action="store_true",
-        help="""Include zero-length files"""
+        help="""Include zero-length files. All zero-length files are considered
+                to have identical content."""
     )
 
     p.add_argument("-a", "--aliases",
         action="store_true",
         help="""Check whether a single file has more than one name, which is
                 possible through hardlinks, as well as symlinks if the
-                --symlinks option is specified. This check is used to skip
+                -s/--symlinks option is specified. This check is used to skip
                 redundant content comparisons, add extra information to
                 reports, and preserve all paths pointing to a selected file
-                when the --prefer option is used."""
+                when the -p/--prefer option is used."""
     )
 
     p.add_argument("-r", "--recurse",
         action="store_true",
-        help="""Recurse into subdirectories"""
+        help="""Recurse into subdirectories."""
     )
 
     p.add_argument("-p", "--prefer",
         metavar="CRITERIA",
         help="""For each set of duplicate files, automatically select one
-                according to the provided criteria."""
+                for preservation according to the provided criteria. Other
+                duplicates can be deleted by passing the generated report to
+                the -x/--execute option."""
     )
 
     p.add_argument("-x", "--execute",
