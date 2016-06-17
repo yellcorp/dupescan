@@ -64,7 +64,7 @@ def get_arg_parser():
 
 SELECTION_MARKER_UNIQUE =    ">"
 SELECTION_MARKER_NONUNIQUE = "?"
-def handle_dupe_set(dupe_set, hardlink_info=True, selector=None):
+def handle_dupe_set(dupe_set, show_hardlink_info=True, selector=None):
     file_size = os.stat(dupe_set[0].path()).st_size
 
     print("## Size: {file_size} Instances: {inst_count} Excess: {excess_size} Names: {name_count}".format(
@@ -86,19 +86,25 @@ def handle_dupe_set(dupe_set, hardlink_info=True, selector=None):
         except EnvironmentError as ee:
             print("## Skipping selection due to error: {!s}".format(ee))
 
-    if len(selected_instances) == 1:
-        keep_marker = SELECTION_MARKER_UNIQUE
-    else:
-        keep_marker = SELECTION_MARKER_NONUNIQUE
+    keep_marker = (
+        SELECTION_MARKER_UNIQUE if len(selected_instances) == 1
+        else SELECTION_MARKER_NONUNIQUE
+    )
 
-    instance_header = hardlink_info
-    for index, instance in enumerate(sorted(dupe_set, key=lambda i: len(i.paths), reverse=True)):
+    instance_header = show_hardlink_info
+    for index, instance in enumerate(
+        sorted(
+            dupe_set,
+            key=lambda i: len(i.paths), reverse=True
+        )
+    ):
         if instance_header:
             if len(instance.paths) == 1:
                 print("# Separate instances follow")
                 instance_header = False
             else:
                 print("# Instance {}".format(index + 1))
+
         for path in sorted(instance.paths):
             print("{keep_marker} {path}".format(
                 keep_marker=keep_marker if instance in selected_instances else " ",
@@ -135,7 +141,7 @@ def main():
         error_cb="print_stderr",
         #log_cb="print_stderr"
     ):
-        handle_dupe_set(dupe_set, hardlink_info=args.aliases, selector=selector)
+        handle_dupe_set(dupe_set, show_hardlink_info=args.aliases, selector=selector)
 
 
 if __name__ == "__main__":
