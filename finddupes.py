@@ -108,7 +108,7 @@ def handle_dupe_set(dupe_set, show_hardlink_info=True, selector=None):
         for path in sorted(instance.paths):
             print("{keep_marker} {path}".format(
                 keep_marker=keep_marker if instance in selected_instances else " ",
-                path=path
+                path=dupelib.report.format_path(path)
             ))
     print()
 
