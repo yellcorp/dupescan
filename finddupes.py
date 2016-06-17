@@ -113,6 +113,17 @@ def handle_dupe_set(dupe_set, show_hardlink_info=True, selector=None):
     print()
 
 
+def and_funcs(f, g):
+    if f is None:
+        return g
+    if g is None:
+        return f
+
+    def h(a):
+        return f(a) and g(a)
+    return h
+
+
 def main():
     p = get_arg_parser()
     args = p.parse_args()
@@ -124,16 +135,26 @@ def main():
     if args.execute:
         raise NotImplementedError("--execute")
 
-    if args.zero:
-        raise NotImplementedError("--zero")
+    link_filter = None
+    if not args.symlinks:
+        link_filter = lambda f: not os.path.islink(f)
 
-    if args.symlinks:
-        raise NotImplementedError("--symlinks")
+    zero_filter = None
+    if not args.zero:
+        zero_filter = lambda f: os.stat(f).st_size > 0
+
+    file_filter = and_funcs(link_filter, zero_filter)
+    dir_filter = link_filter
 
     if args.recurse:
-        path_iterator = dupelib.walk.recurse_iterator(args.paths)
+        path_iterator = dupelib.walk.recurse_iterator(args.paths, dir_filter, file_filter)
     else:
-        path_iterator = args.paths
+        path_iterator = [
+            p for p in args.paths
+            if (
+                dir_filter(p) if os.path.isdir(p) else file_filter(p)
+            )
+        ]
 
     for dupe_set in dupelib.find_duplicate_files(
         path_iterator,
