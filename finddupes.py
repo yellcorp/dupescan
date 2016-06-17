@@ -63,7 +63,7 @@ def get_arg_parser():
 
 
 SELECTION_MARKER_UNIQUE =    ">"
-SELECTION_MARKER_NONUNIQUE = "*"
+SELECTION_MARKER_NONUNIQUE = "?"
 def handle_dupe_set(dupe_set, hardlink_info=True, selector=None):
     file_size = os.stat(dupe_set[0].path()).st_size
 
