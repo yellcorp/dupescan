@@ -5,6 +5,7 @@ import dupelib
 import argparse
 import itertools
 import os
+import sys
 
 
 def get_arg_parser():
@@ -57,6 +58,12 @@ def get_arg_parser():
         metavar="PATH",
         help="""Delete unmarked files in the report at %(metavar)s. Sets where
                 no files are marked will be skipped."""
+    )
+
+    p.add_argument("-n", "--dry-run",
+        action="store_true",
+        help="""Used in combination with -x/--execute. List actions that
+                --execute would perform without actually doing them."""
     )
 
     return p
@@ -124,10 +131,7 @@ def and_funcs(f, g):
     return h
 
 
-def main():
-    p = get_arg_parser()
-    args = p.parse_args()
-
+def do_report(args):
     selector = None
     if args.prefer:
         selector = dupelib.criteria.parse_selector(args.prefer)
@@ -164,6 +168,51 @@ def main():
     ):
         handle_dupe_set(dupe_set, show_hardlink_info=args.aliases, selector=selector)
 
+    return 0
+
+
+def do_execute(args):
+    errors = False
+    with open(args.execute, "r") as report_stream:
+        for marked, unmarked in dupelib.report.parse_report(report_stream):
+            if len(marked) > 0:
+                for path in unmarked:
+                    print(path, end="")
+                    if not args.dry_run:
+                        try:
+                            os.remove(path)
+                        except EnvironmentError as ee:
+                            print(": {!s}".format(ee), end="")
+                            errors = True
+                    print()
+    return 2 if errors else 0
+
+
+def main():
+    p = get_arg_parser()
+    args = p.parse_args()
+
+    if args.execute is None:
+        if args.dry_run:
+            print("Warning: -n/--dry-run has no effect if -x/--execute is not specified.", file=sys.stderr)
+        return do_report(args)
+
+    else:
+        if any((
+            args.paths,
+            args.symlinks,
+            args.zero,
+            args.aliases,
+            args.recurse,
+            args.prefer
+        )):
+            print("Only -n/--dry-run can be used with -x/--execute. All other options must be omitted.", file=sys.stderr)
+            sys.exit(1)
+            return
+
+        return do_execute(args)
+
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

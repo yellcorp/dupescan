@@ -1,3 +1,4 @@
+import re
 import unicodedata
 
 
@@ -77,10 +78,14 @@ def format_path_str(path):
     return "".join(format_char(c) for c in path)
 
 
+def escape_surrounding_space(string):
+    return re.sub("^ +| +$", lambda m: "\\x20" * len(m.group(0)), string)
+
+
 def format_path(path):
     if isinstance(path, bytes):
-        return format_path_bytes(path)
-    return format_path_str(path)
+        return escape_surrounding_space(format_path_bytes(path))
+    return escape_surrounding_space(format_path_str(path))
 
 
 def parse_hex_code(string, start, length):
@@ -123,3 +128,40 @@ def parse_path(path):
         return bytes(codes)
 
     return "".join(chr(c) for c in codes)
+
+
+def parse_report(stream):
+    marked = [ ]
+    unmarked = [ ]
+    error = False
+
+    for line in stream:
+        if line.startswith("#"):
+            continue
+
+        if line == "\n":
+            if not error and (marked or unmarked):
+                yield (tuple(marked), tuple(unmarked))
+            marked = [ ]
+            unmarked = [ ]
+            error = False
+            continue
+
+        marker, sep, path = line[0], line[1], parse_path(line[2:].strip())
+
+        if sep != " ":
+            # PROBLEM: needs at least one space after marker
+            error = True
+
+        elif path == "":
+            # PROBLEM: NO PATH
+            error = True
+        
+        elif marker == " ":
+            unmarked.append(path)
+
+        else:
+            marked.append(path)
+
+    if not error and (marked or unmarked):
+        yield (tuple(marked), tuple(unmarked))
