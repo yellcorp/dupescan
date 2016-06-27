@@ -1,4 +1,5 @@
 import dupelib.criteria as criteria
+import dupelib.programs as programs
 import dupelib.report as report
 import dupelib.unitformat as unitformat
 import dupelib.walk as walk
