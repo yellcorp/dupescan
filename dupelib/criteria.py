@@ -131,7 +131,7 @@ class BinaryFunction(object):
         self.func = func
         self.arg_type = arg_type
 
-    def evaluate(self, a, b):
+    def evaluate(self, context, a, b):
         if self.arg_type is not None:
             bad_messages = [
                 "argument {0} is {1!r}".format(index + 1, type(arg))
@@ -145,7 +145,7 @@ class BinaryFunction(object):
                     my_type=self.arg_type,
                     bads=", ".join(bad_messages)
                 ))
-        return self.func(a, b)
+        return self.func(context, a, b)
 
 
 def compose_not(f):
@@ -158,12 +158,12 @@ def build_operator_graph():
     graph = TokenGraph()
 
     for pos_name, pos_tokens, neg_name, neg_tokens, func, arg_type in (
-        ("is",            ["is"],                  "is not",            ["is not", "isnt"],          lambda a, b: a == b,          None),
-        ("contains",      ["contain/s"],           "not contains",      ["not contain/s"],           lambda a, b: a == b,          str),
-        ("starts with",   ["start/s with?"],       "not starts with",   ["not start/s with?"],       lambda a, b: a.startswith(b), str),
-        ("ends with",     ["end/s with?"],         "not ends with",     ["not end/s with?"],         lambda a, b: a.endswith(b),   str),
-        #("matches glob",  ["match/es glob"],       "not matches glob",  ["not match/es glob"],       ?,                            str),
-        ("matches regex", ["match/es re|regex/p"], "not matches regex", ["not match/es re|regex/p"], lambda a, b: re.match(b, a) is not None, str)
+        ("is",            ["is"],                  "is not",            ["is not", "isnt"],          lambda c, a, b: c.equals(a, b),        None),
+        ("contains",      ["contain/s"],           "not contains",      ["not contain/s"],           lambda c, a, b: c.contains(a, b),      str),
+        ("starts with",   ["start/s with?"],       "not starts with",   ["not start/s with?"],       lambda c, a, b: c.startswith(a, b),    str),
+        ("ends with",     ["end/s with?"],         "not ends with",     ["not end/s with?"],         lambda c, a, b: c.endswith(a, b),      str),
+        #("matches glob",  ["match/es glob"],       "not matches glob",  ["not match/es glob"],       ?,                                     str),
+        ("matches regex", ["match/es re|regex/p"], "not matches regex", ["not match/es re|regex/p"], lambda c, a, b: c.matches_regex(a, b), str)
     ):
         positive = BinaryFunction(pos_name, pos_tokens, func, arg_type)
         graph.add(positive.token_sequences, positive)
@@ -191,9 +191,9 @@ def build_adjective_graph():
     graph = TokenGraph()
 
     for pos_word, neg_word, func, arg_type in (
-        ("shorter",   "longer", lambda a, b: len(a) - len(b),                   str),
-        ("shallower", "deeper", lambda a, b: a.count(os.sep) - b.count(os.sep), str),
-        ("earlier",   "later",  compare,                                        None)
+        ("shorter",   "longer", lambda c, a, b: c.length(a) - c.length(b),               str),
+        ("shallower", "deeper", lambda c, a, b: c.count(a, os.sep) - c.count(b, os.sep), str),
+        ("earlier",   "later",  lambda c, a, b: c.compare(a, b),                         None)
     ):
         positive = BinaryFunction(pos_word, [pos_word], func, arg_type)
         graph.add(positive.token_sequences, positive)
@@ -203,35 +203,66 @@ def build_adjective_graph():
     return graph
 
 
-class Modifier(object):
-    def __init__(self, name, token_sequences, func, arg_type):
-        self.name = name
-        self.token_sequences = tuple(token_sequences)
-        self.func = func
-        self.arg_type = arg_type
+class CaseSensitiveContext(object):
+    def equals(self, a, b):
+        return a == b
 
-    def evaluate(self, a):
-        if self.arg_type is not None:
-            if not isinstance(a, self.arg_type):
-                raise ValueError("{me!r} expects type {my_type!r}, but argument is {got_type!r}".format(
-                    me=self.name,
-                    my_type=self.arg_type,
-                    got_type=type(a)
-                ))
-        return self.func(a)
+    def contains(self, a, b):
+        return b in a
+
+    def startswith(self, a, b):
+        return a.startswith(b)
+
+    def endswith(self, a, b):
+        return a.endswith(b)
+
+    def matches_regex(self, a, regex):
+        return re.match(regex, a) is not None
+
+    def length(self, a):
+        return len(a)
+
+    def count(self, a, string):
+        return a.count(string)
+
+    def compare(self, a, b):
+        if a < b:
+            return -1
+        if a > b:
+            return 1
+        return 0
+
+
+class CaseInsensitiveContext(CaseSensitiveContext):
+    def equals(self, a, b):
+        return a.lower() == b.lower()
+
+    def contains(self, a, b):
+        return b.lower() in a.lower()
+
+    def startswith(self, a, b):
+        return a.lower().startswith(b.lower())
+
+    def endswith(self, a, b):
+        return a.lower().endswith(b.lower())
+
+    def matches_regex(self, a, regex):
+        return re.match(regex, a, re.IGNORECASE) is not None
+
+    def length(self, a):
+        return len(a.lower())
+
+    def count(self, a, string):
+        return a.lower().count(string.lower())
+
+    def compare(self, a, b):
+        return CaseSensitiveContext.compare(self, a.lower(), b.lower())
+
 
 def build_modifier_graph():
     graph = TokenGraph()
-
-    for name, tokens, func, arg_type in (
-        ("ignoring case", ["ignoring case"], str.lower, str),
-    ):
-        modifier = Modifier(name, tokens, func, arg_type)
-        graph.add(modifier.token_sequences, modifier)
-
+    graph.add(["ignoring case"], CaseInsensitiveContext())
     return graph
-
-IDENTITY_MODIFIER = Modifier("", [], lambda a: a, None)
 
 
 class SelectionRules(object):
@@ -461,12 +492,13 @@ class Parser(object):
         prop = self._property()
         op = self._operator()
         arg = self._argument()
-        modifier = self._modifier()
+        context = self._modifier()
 
         def evaluate(path):
             return op.evaluate(
-                modifier.evaluate(prop.evaluate(path)),
-                modifier.evaluate(arg)
+                context,
+                prop.evaluate(path),
+                arg
             )
 
         def comparator(a, b):
@@ -477,12 +509,13 @@ class Parser(object):
     def _comparative_statement(self):
         adj = self._adjective()
         prop = self._property()
-        modifier = self._modifier()
+        context = self._modifier()
 
         def comparator(a, b):
             return adj.evaluate(
-                modifier.evaluate(prop.evaluate(a)),
-                modifier.evaluate(prop.evaluate(b))
+                context,
+                prop.evaluate(a),
+                prop.evaluate(b)
             )
 
         return comparator
@@ -499,7 +532,7 @@ class Parser(object):
     def _modifier(self):
         if self._modifier_graph.navigator().can_go(self._token):
             return self._parse_using(self._modifier_graph)
-        return IDENTITY_MODIFIER
+        return CaseSensitiveContext()
 
     def _argument(self):
         if self._token.is_string():
