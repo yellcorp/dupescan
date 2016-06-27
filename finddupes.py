@@ -207,8 +207,7 @@ def main():
             args.prefer
         )):
             print("Only -n/--dry-run can be used with -x/--execute. All other options must be omitted.", file=sys.stderr)
-            sys.exit(1)
-            return
+            return 1
 
         return do_execute(args)
 
