@@ -113,7 +113,8 @@ def finddupes_report(
     include_empty_files=False,
     include_symlinks=False,
     report_hardlinks=False,
-    prefer=None
+    prefer=None,
+    verbose=False
 ):
     walker = create_walker(paths, recurse, include_empty_files, include_symlinks)
     reporter = create_reporter(prefer, report_hardlinks)
@@ -122,6 +123,6 @@ def finddupes_report(
         walker,
         collect_inodes=report_hardlinks,
         error_cb="print_stderr",
-        #log_cb="print_stderr"
+        log_cb="print_stderr" if verbose else None
     ):
         reporter.handle_dupe_set(dupe_set)

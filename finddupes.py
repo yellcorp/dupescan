@@ -58,6 +58,11 @@ def get_arg_parser():
         help="""Display detailed help on using the --prefer option"""
     )
 
+    p.add_argument("-v", "--verbose",
+        action="store_true",
+        help="""Log detailed information to STDERR."""
+    )
+
     p.add_argument("-x", "--execute",
         metavar="PATH",
         help="""Delete unmarked files in the report at %(metavar)s. Sets where
@@ -281,7 +286,8 @@ def main():
             include_empty_files=args.zero,
             include_symlinks=args.symlinks,
             report_hardlinks=args.aliases,
-            prefer=args.prefer
+            prefer=args.prefer,
+            verbose=args.verbose
         )
         return 0
 
