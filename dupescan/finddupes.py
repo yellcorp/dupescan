@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
-import dupelib
+
+import dupescan
 
 import argparse
+import itertools
 import os
 import sys
 
@@ -252,10 +254,112 @@ MODIFIER  : ignoring case
 """
 
 
-def run_report(report_path, dry_run):
+SELECTION_MARKER_UNIQUE =    ">"
+SELECTION_MARKER_NONUNIQUE = "?"
+class Reporter(object):
+    def __init__(self, show_hardlink_info=True, selector_func=None, output_stream=sys.stdout):
+        self.show_hardlink_info = show_hardlink_info
+        self.selector_func = selector_func
+        self.output_stream = output_stream
+
+    def _print(self, *args):
+        print(*args, file=self.output_stream)
+
+    def handle_dupe_set(self, dupe_set):
+        file_size = os.stat(dupe_set[0].path()).st_size
+
+        self._print("## Size: {file_size} Instances: {inst_count} Excess: {excess_size} Names: {name_count}".format(
+            inst_count=len(dupe_set),
+            name_count=sum(len(instance.paths) for instance in dupe_set),
+            file_size=dupescan.unitformat.format_file_size(file_size),
+            excess_size=dupescan.unitformat.format_file_size(file_size * (len(dupe_set) - 1))
+        ))
+
+        selected_paths = set()
+        selected_instances = set()
+        if self.selector_func is not None:
+            all_names = itertools.chain(*(instance.paths for instance in dupe_set))
+            try:
+                selected_paths.update(self.selector_func.pick(all_names))
+                for instance in dupe_set:
+                    if len(selected_paths.intersection(instance.paths)) > 0:
+                        selected_instances.add(instance)
+            except EnvironmentError as ee:
+                self._print("## Skipping selection due to error: {!s}".format(ee))
+
+        keep_marker = (
+            SELECTION_MARKER_UNIQUE if len(selected_instances) == 1
+            else SELECTION_MARKER_NONUNIQUE
+        )
+
+        instance_header = self.show_hardlink_info
+        for index, instance in enumerate(
+            sorted(
+                dupe_set,
+                key=lambda i: len(i.paths), reverse=True
+            )
+        ):
+            if instance_header:
+                if len(instance.paths) == 1:
+                    self._print("# Separate instances follow")
+                    instance_header = False
+                else:
+                    self._print("# Instance {}".format(index + 1))
+
+            for path in sorted(instance.paths):
+                self._print("{keep_marker} {path}".format(
+                    keep_marker=keep_marker if instance in selected_instances else " ",
+                    path=dupescan.report.format_path(path)
+                ))
+        self._print()
+
+
+def and_funcs(f, g):
+    if f is None:
+        return g
+    if g is None:
+        return f
+
+    def h(a):
+        return f(a) and g(a)
+    return h
+
+
+def create_walker(paths, recurse=False, include_empty_files=False, include_symlinks=False):
+    zero_filter = None
+    if not include_empty_files:
+        zero_filter = lambda f: os.stat(f).st_size > 0
+
+    symlink_filter = None
+    if not include_symlinks:
+        symlink_filter = lambda f: not os.path.islink(f)
+
+    file_filter = and_funcs(symlink_filter, zero_filter)
+    dir_filter = symlink_filter
+
+    if recurse:
+        return dupescan.walk.recurse_iterator(paths, dir_filter, file_filter)
+    else:
+        return [
+            p for p in paths
+            if (
+                dir_filter(p) if os.path.isdir(p) else file_filter(p)
+            )
+        ]
+
+
+def create_reporter(prefer=None, report_hardlinks=False):
+    selector = None
+    if prefer:
+        selector = dupescan.criteria.parse_selector(prefer)
+
+    return Reporter(show_hardlink_info=report_hardlinks, selector_func=selector)
+
+
+def execute_report(report_path, dry_run):
     errors = False
     with open(report_path, "r") as report_stream:
-        for marked, unmarked in dupelib.report.parse_report(report_stream):
+        for marked, unmarked in dupescan.report.parse_report(report_stream):
             if len(marked) > 0:
                 for path in unmarked:
                     print(path, end="")
@@ -269,18 +373,39 @@ def run_report(report_path, dry_run):
     return 2 if errors else 0
 
 
-def main():
+def scan(
+    paths,
+    recurse=False,
+    include_empty_files=False,
+    include_symlinks=False,
+    report_hardlinks=False,
+    prefer=None,
+    verbose=False
+):
+    walker = create_walker(paths, recurse, include_empty_files, include_symlinks)
+    reporter = create_reporter(prefer, report_hardlinks)
+
+    for dupe_set in dupescan.find_duplicate_files(
+        walker,
+        collect_inodes=report_hardlinks,
+        error_cb="print_stderr",
+        log_cb="print_stderr" if verbose else None
+    ):
+        reporter.handle_dupe_set(dupe_set)
+
+
+def run(argv=None):
     p = get_arg_parser()
-    args = p.parse_args()
+    args = p.parse_args(argv)
 
     if args.help_prefer:
-        print(PREFER_HELP.format(script_name=os.path.basename(sys.argv[0])))
+        print(PREFER_HELP.strip().format(script_name=os.path.basename(sys.argv[0])))
         return 0
 
     if args.execute is None:
         if args.dry_run:
             print("Warning: -n/--dry-run has no effect if -x/--execute is not specified.", file=sys.stderr)
-        dupelib.programs.finddupes_report(
+        scan(
             paths=args.paths,
             recurse=args.recurse,
             include_empty_files=args.zero,
@@ -303,8 +428,12 @@ def main():
             print("Only -n/--dry-run can be used with -x/--execute. All other options must be omitted.", file=sys.stderr)
             return 1
 
-        return run_report(args.execute, args.dry_run)
+        return execute_report(args.execute, args.dry_run)
+
+
+def main():
+    sys.exit(run(sys.argv[1:]))
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
