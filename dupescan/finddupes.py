@@ -9,6 +9,9 @@ import os
 import sys
 
 
+__all__ = [ "execute_report", "scan", "run" ] 
+
+
 def get_arg_parser():
     p = argparse.ArgumentParser(
         description="Find files with identical content."
