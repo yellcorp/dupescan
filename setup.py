@@ -8,7 +8,7 @@ from setuptools import setup
 
 setup(
     name             = "dupescan",
-    version          = "0.0.2",
+    version          = dupescan.__version__,
     description      = dupescan.__doc__.strip(),
     long_description = """TODO: LONG DESCRIPTION""",
     author           = "Jim Boswell",

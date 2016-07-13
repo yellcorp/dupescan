@@ -46,6 +46,11 @@ def get_arg_parser():
         help="""List files that appear only as a descendant of the second directory"""
     )
 
+    p.add_argument("--version",
+        action="version",
+        version="%(prog)s " + dupescan.__version__
+    )
+
     return p
 
 

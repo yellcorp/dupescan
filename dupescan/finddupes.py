@@ -77,6 +77,11 @@ def get_arg_parser():
                 --execute would perform without actually doing them."""
     )
 
+    p.add_argument("--version",
+        action="version",
+        version="%(prog)s " + dupescan.__version__
+    )
+
     return p
 
 
