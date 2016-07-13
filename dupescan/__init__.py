@@ -1,3 +1,4 @@
+import dupescan.correlate as correlate
 import dupescan.criteria as criteria
 import dupescan.finddupes as finddupes
 import dupescan.report as report
