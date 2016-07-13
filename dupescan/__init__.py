@@ -1,3 +1,7 @@
+"""
+Library and command-line utilities to detect duplicate files by content.
+"""
+
 import dupescan.correlate as correlate
 import dupescan.criteria as criteria
 import dupescan.finddupes as finddupes
