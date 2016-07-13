@@ -391,6 +391,7 @@ def scan(
     for dupe_set in dupescan.find_duplicate_files(
         walker,
         collect_inodes=report_hardlinks,
+        unique_paths=True,
         error_cb="print_stderr",
         log_cb="print_stderr" if verbose else None
     ):

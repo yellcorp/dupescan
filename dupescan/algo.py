@@ -122,12 +122,14 @@ def find_duplicate_files_by_content(file_instance_list, error_cb, log_cb):
 def find_duplicate_files(
     path_iterator,
     collect_inodes=None,
+    unique_paths=False,
     error_cb=None,
     log_cb=None
 ):
     error_cb = resolve_handler(error_cb, "ignore", FILE_ERROR_HANDLERS)
     log_cb =   resolve_handler(log_cb,   "ignore", LOG_HANDLERS)
 
+    seen = set()
     size_index = collections.defaultdict(list)
 
     if collect_inodes:
@@ -139,6 +141,11 @@ def find_duplicate_files(
     file_count = 0
     error_count = 0
     for path in path_iterator:
+        if unique_paths:
+            if path in seen:
+                continue
+            seen.add(path)
+
         file_count += 1
         try:
             stat = os.stat(path)
