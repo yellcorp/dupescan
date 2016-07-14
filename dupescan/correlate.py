@@ -85,12 +85,17 @@ def correlate(
         partitions = [ [ ], [ ] ]
         for instance in dupe_set:
             path = instance.path()
-            from_where = origin.pop(path)
 
-            if from_where & 1:
+            if origin[path] & 1:
                 partitions[0].append(path)
-            if from_where & 2:
+                origin[path] &= ~1
+
+            elif origin[path] & 2:
                 partitions[1].append(path)
+                origin[path] &= ~2
+
+            if origin[path] == 0:
+                del origin[path]
 
         for a, b in itertools.zip_longest(*partitions):
             if a is None:
