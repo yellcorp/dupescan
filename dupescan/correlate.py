@@ -46,6 +46,11 @@ def get_arg_parser():
         help="""List files that appear only as a descendant of the second directory."""
     )
 
+    p.add_argument("--no-summary",
+        action="store_true",
+        help="""Suppress the summary."""
+    )
+
     p.add_argument("--version",
         action="version",
         version="%(prog)s " + dupescan.__version__
@@ -144,7 +149,9 @@ def run(argv=None):
     if len(subscribed_actions) == 0:
         subscribed_actions = { MATCH, ADDED, REMOVED }
 
+    action_count = collections.Counter()
     for action, path1, path2 in correlate(*args.dirs, verbose=args.verbose):
+        action_count[action] += 1
         if action in subscribed_actions:
             symbol = SYMBOLS[action]
 
@@ -156,6 +163,15 @@ def run(argv=None):
                 print("{} {}".format(symbol, dupescan.report.format_path(path2)))
 
             print()
+
+    if not args.no_summary:
+        print(
+            "# " +
+            " ".join(
+                "{}{}".format(SYMBOLS[action], action_count[action])
+                for action in (MATCH, ADDED, REMOVED)
+            )
+        )
 
     return 0
 
