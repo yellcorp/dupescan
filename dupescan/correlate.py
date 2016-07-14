@@ -47,8 +47,18 @@ def get_arg_parser():
     )
 
     p.add_argument("-c", "--colorize",
+        dest="colorize",
+        default=None,
         action="store_true",
-        help="""Colorize adds and removes."""
+        help="""Colorize output."""
+    )
+
+    p.add_argument("--no-colorize",
+        dest="colorize",
+        action="store_false",
+        help="""Force colorizing off. If neither --colorize or --no-colorize is
+                specified, it will be enabled if a compatible terminal is
+                detected."""
     )
 
     p.add_argument("--no-summary",
@@ -66,7 +76,9 @@ def get_arg_parser():
 
 MATCH = 1
 ADDED = 2
-REMOVED = 3
+REMOVED = 4
+ACTION_ORDER = (MATCH, ADDED, REMOVED)
+ALL_ACTIONS = sum(ACTION_ORDER)
 def correlate(
     path1, path2,
     verbose=False
@@ -132,27 +144,87 @@ def correlate(
             yield (ADDED, None, path)
 
 
-FORMATS = {
+ACTION_STRINGS = {
     MATCH:   ("=", "Matches", None),
-    ADDED:   ("+", "Adds",    "\x1b[32m"),
-    REMOVED: ("-", "Removes", "\x1b[31m")
+    ADDED:   ("+", "Adds",    "32"),
+    REMOVED: ("-", "Removes", "31")
 }
 SYMBOL = 0
 SUMMARY_WORD = 1
-COLOR = 2
+DEFAULT_SGR = 2
 
 
-def ansi(string, prefix, do_it=True):
-    if not do_it or prefix is None:
+def format_ansi_sgr(string, sgr):
+    if sgr is None:
         return string
-    return "{}{}{}".format(prefix, string, "\x1b[0m")
+    return "\x1b[{}m{}\x1b[0m".format(sgr, string)
+
+
+def print_report(
+    path1, path2, # todo: change 
+    filter_actions=ALL_ACTIONS,
+    ansi=None, # None: autodetect, True: use default, False: no colors, or tuple of 3 things to appear between \x1b[ and m
+    summary=True,
+    verbose=False,
+    file=None
+):
+    if file is None:
+        file = sys.stdout
+
+    if ansi is None:
+        try:
+            ansi = file.isatty()
+        except AttributeError:
+            ansi = False
+
+    if ansi is True:
+        ansi = tuple(
+            ACTION_STRINGS[action][DEFAULT_SGR]
+            for action in ACTION_ORDER
+        )
+    elif ansi is False:
+        ansi = (None, None, None)
+
+    sgr_lookup = dict(zip(ACTION_ORDER, ansi))
+
+    action_count = collections.Counter()
+
+    for action, path1, path2 in correlate(path1, path2, verbose=verbose):
+        action_count[action] += 1
+        if filter_actions & action:
+            symbol = ACTION_STRINGS[action][SYMBOL]
+
+            if path1 is not None:
+                print(format_ansi_sgr(
+                    "{} {}".format(symbol, dupescan.report.format_path(path1)),
+                    sgr_lookup[action]
+                ), file=file)
+                symbol = " "
+
+            if path2 is not None:
+                print(format_ansi_sgr(
+                    "{} {}".format(symbol, dupescan.report.format_path(path2)),
+                    sgr_lookup[action]
+                ), file=file)
+
+            print()
+
+    if summary:
+        print(
+            "# " +
+            ", ".join(
+                "{}: {}".format(ACTION_STRINGS[action][SUMMARY_WORD], action_count[action])
+                for action in (MATCH, ADDED, REMOVED)
+            ),
+            file=file
+        )
 
 
 def run(argv=None):
     p = get_arg_parser()
     args = p.parse_args(argv)
 
-    subscribed_actions = set(
+    filter_actions = sum(
         action for
         action, select in (
             (MATCH,   args.matches),
@@ -162,40 +234,17 @@ def run(argv=None):
         if select
     )
 
-    if len(subscribed_actions) == 0:
-        subscribed_actions = { MATCH, ADDED, REMOVED }
+    if filter_actions == 0:
+        filter_actions = ALL_ACTIONS
 
-    action_count = collections.Counter()
-    for action, path1, path2 in correlate(*args.dirs, verbose=args.verbose):
-        action_count[action] += 1
-        if action in subscribed_actions:
-            symbol = FORMATS[action][SYMBOL]
-
-            if path1 is not None:
-                print(ansi(
-                    "{} {}".format(symbol, dupescan.report.format_path(path1)),
-                    FORMATS[action][COLOR],
-                    args.colorize
-                ))
-                symbol = " "
-
-            if path2 is not None:
-                print(ansi(
-                    "{} {}".format(symbol, dupescan.report.format_path(path2)),
-                    FORMATS[action][COLOR],
-                    args.colorize
-                ))
-
-            print()
-
-    if not args.no_summary:
-        print(
-            "# " +
-            ", ".join(
-                "{}: {}".format(FORMATS[action][SUMMARY_WORD], action_count[action])
-                for action in (MATCH, ADDED, REMOVED)
-            )
-        )
+    print_report(
+        *args.dirs,
+        filter_actions=filter_actions,
+        ansi=args.colorize,
+        summary=not args.no_summary,
+        verbose=args.verbose,
+        file=sys.stdout
+    )
 
     return 0
 
