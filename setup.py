@@ -4,13 +4,22 @@
 import dupescan
 
 from setuptools import setup
+import os
+import sys
+
+
+with open(os.path.join(
+        os.path.dirname(sys.modules["__main__"].__file__),
+        "readme.rst"
+    ), "r") as readme_stream:
+    readme_text = readme_stream.read()
 
 
 setup(
     name             = "dupescan",
     version          = dupescan.__version__,
     description      = dupescan.__doc__.strip(),
-    long_description = """TODO: LONG DESCRIPTION""",
+    long_description = readme_text,
     author           = "Jim Boswell",
     author_email     = "jimb@yellcorp.org",
     license          = "MIT",
