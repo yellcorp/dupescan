@@ -79,10 +79,7 @@ ADDED = 2
 REMOVED = 4
 ACTION_ORDER = (MATCH, ADDED, REMOVED)
 ALL_ACTIONS = sum(ACTION_ORDER)
-def correlate(
-    path1, path2,
-    verbose=False
-):
+def correlate(root1, root2, verbose=False):
     origin = collections.defaultdict(int)
 
     def iter_origin():
@@ -93,7 +90,7 @@ def correlate(
                 yield path
 
     ignore_symlinks = lambda f: not os.path.islink(f)
-    for root, bit in ((path1, 1), (path2, 2)):
+    for root, bit in ((root1, 1), (root2, 2)):
         for path in dupescan.walk.recurse_iterator((root,), ignore_symlinks, ignore_symlinks):
             origin[path] |= bit 
 
@@ -161,7 +158,7 @@ def format_ansi_sgr(string, sgr):
 
 
 def print_report(
-    path1, path2, # todo: change 
+    root1, root2,
     filter_actions=ALL_ACTIONS,
     ansi=None, # None: autodetect, True: use default, False: no colors, or tuple of 3 things to appear between \x1b[ and m
     summary=True,
@@ -189,7 +186,7 @@ def print_report(
 
     action_count = collections.Counter()
 
-    for action, path1, path2 in correlate(path1, path2, verbose=verbose):
+    for action, path1, path2 in correlate(root1, root2, verbose=verbose):
         action_count[action] += 1
         if filter_actions & action:
             symbol = ACTION_STRINGS[action][SYMBOL]
