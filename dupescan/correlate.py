@@ -12,7 +12,9 @@ __all__ = [ "correlate", "run" ]
 
 def get_arg_parser():
     p = argparse.ArgumentParser(
-        description="Compare two directories by content."
+        description="Compare two directories by content.",
+        epilog="""If none of -m/--matches, -r/--removes, -a/--adds is
+                  specified, all are reported."""
     )
 
     p.add_argument("dirs",
