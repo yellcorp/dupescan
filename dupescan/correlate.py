@@ -46,6 +46,11 @@ def get_arg_parser():
         help="""List files that appear only as a descendant of the second directory."""
     )
 
+    p.add_argument("-c", "--colorize",
+        action="store_true",
+        help="""Colorize adds and removes."""
+    )
+
     p.add_argument("--no-summary",
         action="store_true",
         help="""Suppress the summary."""
@@ -127,11 +132,22 @@ def correlate(
             yield (ADDED, None, path)
 
 
-SYMBOLS = {
-    MATCH:   "=",
-    ADDED:   "+",
-    REMOVED: "-"
+FORMATS = {
+    MATCH:   ("=", "Matches", None),
+    ADDED:   ("+", "Adds",    "\x1b[32m"),
+    REMOVED: ("-", "Removes", "\x1b[31m")
 }
+SYMBOL = 0
+SUMMARY_WORD = 1
+COLOR = 2
+
+
+def ansi(string, prefix, do_it=True):
+    if not do_it or prefix is None:
+        return string
+    return "{}{}{}".format(prefix, string, "\x1b[0m")
+
+
 def run(argv=None):
     p = get_arg_parser()
     args = p.parse_args(argv)
@@ -153,22 +169,30 @@ def run(argv=None):
     for action, path1, path2 in correlate(*args.dirs, verbose=args.verbose):
         action_count[action] += 1
         if action in subscribed_actions:
-            symbol = SYMBOLS[action]
+            symbol = FORMATS[action][SYMBOL]
 
             if path1 is not None:
-                print("{} {}".format(symbol, dupescan.report.format_path(path1)))
+                print(ansi(
+                    "{} {}".format(symbol, dupescan.report.format_path(path1)),
+                    FORMATS[action][COLOR],
+                    args.colorize
+                ))
                 symbol = " "
 
             if path2 is not None:
-                print("{} {}".format(symbol, dupescan.report.format_path(path2)))
+                print(ansi(
+                    "{} {}".format(symbol, dupescan.report.format_path(path2)),
+                    FORMATS[action][COLOR],
+                    args.colorize
+                ))
 
             print()
 
     if not args.no_summary:
         print(
             "# " +
-            " ".join(
-                "{}{}".format(SYMBOLS[action], action_count[action])
+            ", ".join(
+                "{}: {}".format(FORMATS[action][SUMMARY_WORD], action_count[action])
                 for action in (MATCH, ADDED, REMOVED)
             )
         )
