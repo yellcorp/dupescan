@@ -44,7 +44,7 @@ class ParseError(Exception):
 
 def hex_escape(n):
     for max_code, format_str in MAX_CODE_TO_FORMAT:
-        if n < max_code:
+        if n <= max_code:
             return format_str.format(n)
     raise ValueError("Codepoint out of range")
 
