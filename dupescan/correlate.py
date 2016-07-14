@@ -7,7 +7,7 @@ import os
 import sys
 
 
-__all__ = [ "correlate", "run" ] 
+__all__ = [ "correlate", "generate_report", "run" ] 
 
 
 def get_arg_parser():
@@ -159,7 +159,7 @@ def format_ansi_sgr(string, sgr):
     return "\x1b[{}m{}\x1b[0m".format(sgr, string)
 
 
-def print_report(
+def generate_report(
     root1, root2,
     filter_actions=ALL_ACTIONS,
     ansi=None, # None: autodetect, True: use default, False: no colors, or tuple of 3 things to appear between \x1b[ and m
@@ -236,7 +236,7 @@ def run(argv=None):
     if filter_actions == 0:
         filter_actions = ALL_ACTIONS
 
-    print_report(
+    generate_report(
         *args.dirs,
         filter_actions=filter_actions,
         ansi=args.colorize,
