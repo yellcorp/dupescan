@@ -145,9 +145,17 @@ def run(argv=None):
         subscribed_actions = { MATCH, ADDED, REMOVED }
 
     for action, path1, path2 in correlate(*args.dirs, verbose=args.verbose):
-        # TODO: formatters
         if action in subscribed_actions:
-            print("{} {}\t{}".format(SYMBOLS[action], path1 or "", path2 or ""))
+            symbol = SYMBOLS[action]
+
+            if path1 is not None:
+                print("{} {}".format(symbol, dupescan.report.format_path(path1)))
+                symbol = " "
+
+            if path2 is not None:
+                print("{} {}".format(symbol, dupescan.report.format_path(path2)))
+
+            print()
 
     return 0
 
