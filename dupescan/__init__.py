@@ -2,7 +2,7 @@
 Library and command-line utilities to detect duplicate files by content.
 """
 
-__version__ = "0.0.3"
+__version__ = "0.0.5"
 
 
 import dupescan.correlate as correlate
