@@ -148,7 +148,7 @@ with single or double quotes.
 A criteria string must be a single argument that follows the --prefer option,
 and has the following grammar.
 
-CRITERIA : PHRASE ( , PHRASE ) +
+CRITERIA : PHRASE ( , PHRASE ) *
   A CRITERIA is a one or more PHRASEs, separated by commas (,).
 
 PHRASE : BOOLEAN_PHRASE | EXTREMA_PHRASE
