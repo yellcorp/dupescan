@@ -33,17 +33,17 @@ def get_arg_parser():
 
     p.add_argument("-m", "--matches",
         action="store_true",
-        help="""List files that appear in both directories"""
+        help="""List files that appear in both directories."""
     )
 
     p.add_argument("-r", "--removes",
         action="store_true",
-        help="""List files that appear only as a descendant of the first directory"""
+        help="""List files that appear only as a descendant of the first directory."""
     )
 
     p.add_argument("-a", "--adds",
         action="store_true",
-        help="""List files that appear only as a descendant of the second directory"""
+        help="""List files that appear only as a descendant of the second directory."""
     )
 
     p.add_argument("--version",
