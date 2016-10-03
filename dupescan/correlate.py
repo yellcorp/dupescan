@@ -177,14 +177,16 @@ def generate_report(
             ansi = False
 
     if ansi is True:
-        ansi = tuple(
+        ansi_codes = tuple(
             ACTION_STRINGS[action][DEFAULT_SGR]
             for action in ACTION_ORDER
         )
     elif ansi is False:
-        ansi = (None, None, None)
+        ansi_codes = (None, None, None)
+    else:
+        ansi_codes = tuple(ansi)
 
-    sgr_lookup = dict(zip(ACTION_ORDER, ansi))
+    sgr_lookup = dict(zip(ACTION_ORDER, ansi_codes))
 
     action_count = collections.Counter()
 
