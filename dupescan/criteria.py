@@ -365,6 +365,8 @@ class Lexer(object):
             ch = self.text[self.pos]
             if ch.isspace():
                 self.pos += 1
+                continue
+
             if ch == ",":
                 self.pos += 1
                 return self._token(Token.COMMA, None)
