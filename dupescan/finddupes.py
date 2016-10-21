@@ -353,10 +353,48 @@ def create_walker(paths, recurse=False, include_empty_files=False, include_symli
         ]
 
 
+def highlight_sample(sample, line_width, hl_pos, hl_length):
+    if hl_pos is None:
+        return
+
+    highlight_buf = [ " " * hl_pos ]
+    max_length = line_width - 12
+    if hl_length is None:
+        highlight_buf.append("^")
+        hl_length = max_length
+    else:
+        highlight_buf.append("~" * hl_length)
+        hl_length = min(hl_length, max_length)
+    highlight = "".join(highlight_buf)
+
+    start = hl_pos - int((line_width - hl_length) / 2)
+    if start <= 0:
+        start = 0
+        start_ellipsis = False
+    else:
+        start_ellipsis = True
+
+    end_ellipsis = start + line_width < len(sample)
+    sample = sample[start : start + line_width]
+    if start_ellipsis:
+        sample = "..." + sample[3:]
+    if end_ellipsis:
+        sample = sample[:-3] + "..."
+    yield sample
+
+    highlight = highlight[start : start + line_width]
+    yield highlight
+
+
 def create_reporter(prefer=None, report_hardlinks=False):
     selector = None
     if prefer:
-        selector = dupescan.criteria.parse_selector(prefer)
+        try:
+            selector = dupescan.criteria.parse_selector(prefer)
+        except dupescan.criteria.ParseError as parse_error:
+            for line in highlight_sample(prefer, 78, parse_error._position, parse_error._length):
+                print(line, file=sys.stderr)
+            raise
 
     return Reporter(show_hardlink_info=report_hardlinks, selector_func=selector)
 
