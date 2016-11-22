@@ -4,6 +4,7 @@ import argparse
 import itertools
 import os
 import sys
+import time
 
 
 __all__ = [ "execute_report", "scan", "run" ] 
@@ -66,6 +67,11 @@ def get_arg_parser():
                 the -x/--execute option."""
     )
 
+    p.add_argument("--time",
+        action="store_true",
+        help="""Add elasped time to the generated report."""
+    )
+
     p.add_argument("--help-prefer",
         action="store_true",
         help="""Display detailed help on using the --prefer option"""
@@ -104,13 +110,13 @@ class Reporter(object):
         self.selector_func = selector_func
         self.output_stream = output_stream
 
-    def _print(self, *args):
+    def print(self, *args):
         print(*args, file=self.output_stream)
 
     def handle_dupe_set(self, dupe_set):
         file_size = os.stat(dupe_set[0].path()).st_size
 
-        self._print("## Size: {file_size} Instances: {inst_count} Excess: {excess_size} Names: {name_count}".format(
+        self.print("## Size: {file_size} Instances: {inst_count} Excess: {excess_size} Names: {name_count}".format(
             inst_count=len(dupe_set),
             name_count=sum(len(instance.paths) for instance in dupe_set),
             file_size=dupescan.units.format_byte_count(file_size),
@@ -127,7 +133,7 @@ class Reporter(object):
                     if len(selected_paths.intersection(instance.paths)) > 0:
                         selected_instances.add(instance)
             except EnvironmentError as ee:
-                self._print("## Skipping selection due to error: {!s}".format(ee))
+                self.print("## Skipping selection due to error: {!s}".format(ee))
 
         keep_marker = (
             SELECTION_MARKER_UNIQUE if len(selected_instances) == 1
@@ -143,17 +149,17 @@ class Reporter(object):
         ):
             if instance_header:
                 if len(instance.paths) == 1:
-                    self._print("# Separate instances follow")
+                    self.print("# Separate instances follow")
                     instance_header = False
                 else:
-                    self._print("# Instance {}".format(index + 1))
+                    self.print("# Instance {}".format(index + 1))
 
             for path in sorted(instance.paths):
-                self._print("{keep_marker} {path}".format(
+                self.print("{keep_marker} {path}".format(
                     keep_marker=keep_marker if instance in selected_instances else " ",
                     path=dupescan.report.format_path(path)
                 ))
-        self._print()
+        self.print()
 
 
 def and_funcs(f, g):
@@ -261,10 +267,13 @@ def scan(
     report_hardlinks=False,
     prefer=None,
     verbose=False,
-    buffer_size=0
+    buffer_size=0,
+    log_time=False
 ):
     walker = create_walker(paths, recurse, include_empty_files, include_symlinks)
     reporter = create_reporter(prefer, report_hardlinks)
+
+    start_time = time.time() if log_time else 0
 
     for dupe_set in dupescan.find_duplicate_files(
         walker,
@@ -275,6 +284,9 @@ def scan(
         buffer_size=buffer_size
     ):
         reporter.handle_dupe_set(dupe_set)
+
+    if log_time:
+        reporter.print("# Elapsed time: {}".format(dupescan.units.format_duration(time.time() - start_time)))
 
 
 def run(argv=None):
@@ -302,7 +314,8 @@ def run(argv=None):
             report_hardlinks=args.aliases,
             prefer=args.prefer,
             verbose=args.verbose,
-            buffer_size=args.buffer_size
+            buffer_size=args.buffer_size,
+            log_time=args.time
         )
         return 0
 
@@ -314,7 +327,8 @@ def run(argv=None):
             args.aliases,
             args.recurse,
             args.prefer,
-            args.buffer_size
+            args.buffer_size,
+            args.time
         )):
             print("Only -n/--dry-run can be used with -x/--execute. All other options must be omitted.", file=sys.stderr)
             return 1

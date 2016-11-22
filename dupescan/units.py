@@ -68,3 +68,23 @@ def parse_byte_count(string):
         value *= _PARSE_BYTE_SUFFIXES[match.group("suffix").lower()]
 
     return value
+
+
+def format_duration(seconds, seconds_precision=0):
+    floor_mins, mod_secs = divmod(seconds, 60)
+    floor_hrs,  mod_mins = divmod(floor_mins, 60)
+
+    units = [ ]
+
+    if seconds >= 3600:
+        units.append((floor_hrs, 0, "h"))
+
+    if seconds >= 60:
+        units.append((mod_mins, 0, "m"))
+
+    units.append((mod_secs, seconds_precision, "s"))
+
+    return " ".join(
+        "{value:.{prec}f}{suffix}".format(value=v, prec=p, suffix=s)
+        for v, p, s in units
+    )
