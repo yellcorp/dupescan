@@ -276,8 +276,8 @@ class Reporter(object):
         self._print("## Size: {file_size} Instances: {inst_count} Excess: {excess_size} Names: {name_count}".format(
             inst_count=len(dupe_set),
             name_count=sum(len(instance.paths) for instance in dupe_set),
-            file_size=dupescan.unitformat.format_file_size(file_size),
-            excess_size=dupescan.unitformat.format_file_size(file_size * (len(dupe_set) - 1))
+            file_size=dupescan.units.format_byte_count(file_size),
+            excess_size=dupescan.units.format_byte_count(file_size * (len(dupe_set) - 1))
         ))
 
         selected_paths = set()
