@@ -18,8 +18,8 @@ def write_files(source, target_dir, template, num_copies):
         shutil.copy(master_path, copy_path)
 
 
-BIG_SIZE = 0x100005
-SMALL_SIZE = 0x2003
+BIG_SIZE = 30 * 1024 * 1024 + 5 # 30 MB + 5 bytes
+SMALL_SIZE = 3 * 1024 * 1024 + 5 # 3 MB + 5 bytes
 
 
 def main():
