@@ -47,6 +47,17 @@ def get_arg_parser():
         help="""Recurse into subdirectories."""
     )
 
+    p.add_argument("--buffer-size",
+        type=dupescan.units.parse_byte_count,
+        default=0,
+        metavar="SIZE",
+        help="""Specifies the size in bytes of each buffer used when comparing
+                files by content. Numbers beginning with "0x" are interpreted
+                as hexadecimal. A suffix can also be specified, indicating the
+                units: B=bytes (the default if omitted), K=kibibytes,
+                M=mebibytes, G=gibibytes. The default size is 4096."""
+    )
+
     p.add_argument("-p", "--prefer",
         metavar="CRITERIA",
         help="""For each set of duplicate files, automatically select one
@@ -423,7 +434,8 @@ def scan(
     include_symlinks=False,
     report_hardlinks=False,
     prefer=None,
-    verbose=False
+    verbose=False,
+    buffer_size=0
 ):
     walker = create_walker(paths, recurse, include_empty_files, include_symlinks)
     reporter = create_reporter(prefer, report_hardlinks)
@@ -433,7 +445,8 @@ def scan(
         collect_inodes=report_hardlinks,
         unique_paths=True,
         error_cb="print_stderr",
-        log_cb="print_stderr" if verbose else None
+        log_cb="print_stderr" if verbose else None,
+        buffer_size=buffer_size
     ):
         reporter.handle_dupe_set(dupe_set)
 
@@ -456,7 +469,8 @@ def run(argv=None):
             include_symlinks=args.symlinks,
             report_hardlinks=args.aliases,
             prefer=args.prefer,
-            verbose=args.verbose
+            verbose=args.verbose,
+            buffer_size=args.buffer_size
         )
         return 0
 
@@ -467,7 +481,8 @@ def run(argv=None):
             args.zero,
             args.aliases,
             args.recurse,
-            args.prefer
+            args.prefer,
+            args.buffer_size
         )):
             print("Only -n/--dry-run can be used with -x/--execute. All other options must be omitted.", file=sys.stderr)
             return 1

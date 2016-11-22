@@ -1,5 +1,5 @@
 from .fs import FileInstance, AnonymousStorageId, UnixStorageId
-from .resources import StreamPool
+from .resources import StreamPool, decide_max_open_files
 
 import collections
 import operator
@@ -52,9 +52,8 @@ def resolve_handler(value, default, lookup):
     return value
 
 
-def find_duplicate_files_by_content(file_instance_list, error_cb, log_cb):
-    pool = StreamPool(128) # TODO: base off os limits
-    chunk_size = 4096
+def find_duplicate_files_by_content(file_instance_list, max_open_files, buffer_size, error_cb, log_cb):
+    pool = StreamPool(max_open_files)
 
     completed = 0
     aborted = 0
@@ -73,7 +72,7 @@ def find_duplicate_files_by_content(file_instance_list, error_cb, log_cb):
 
         for stream in compare_set:
             try:
-                chunk = stream.read(chunk_size)
+                chunk = stream.read(buffer_size)
             except EnvironmentError as read_error:
                 error_path = stream.path
                 error_cb(error_path, read_error)
@@ -119,12 +118,15 @@ def find_duplicate_files_by_content(file_instance_list, error_cb, log_cb):
     log_cb("Content comparison end: completed={0} aborted={1}".format(completed, aborted))
 
 
+DEFAULT_BUFFER_SIZE = 4096
 def find_duplicate_files(
     path_iterator,
     collect_inodes=None,
     unique_paths=False,
+    max_open_files=None,
     error_cb=None,
-    log_cb=None
+    log_cb=None,
+    buffer_size=None
 ):
     error_cb = resolve_handler(error_cb, "ignore", FILE_ERROR_HANDLERS)
     log_cb =   resolve_handler(log_cb,   "ignore", LOG_HANDLERS)
@@ -164,6 +166,12 @@ def find_duplicate_files(
     ]
     log_cb("Sets: {0}".format(len(sets)))
 
+    if max_open_files is None or max_open_files <= 0:
+        max_open_files = decide_max_open_files()
+
+    if buffer_size is None or buffer_size <= 0:
+        buffer_size = DEFAULT_BUFFER_SIZE
+
     for size, id_index in sorted(sets, key=operator.itemgetter(0), reverse=True):
         instances = [
             FileInstance(storage_id=storage_id, paths=paths)
@@ -180,5 +188,5 @@ def find_duplicate_files(
 
         else:
             log_cb("Content comparison start: {0} instances of {1} bytes each".format(len(instances), size))
-            for same_contents_set in find_duplicate_files_by_content(instances, error_cb, log_cb):
+            for same_contents_set in find_duplicate_files_by_content(instances, max_open_files, buffer_size, error_cb, log_cb):
                 yield same_contents_set
