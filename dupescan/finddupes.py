@@ -12,7 +12,12 @@ __all__ = [ "execute_report", "scan", "run" ]
 
 def get_arg_parser():
     p = argparse.ArgumentParser(
-        description="Find files with identical content."
+        description="Find files with identical content.",
+        epilog="""Arguments that accept byte counts accept an integer with an
+                  optional suffix indicating units.  'B' indicates bytes, which
+                  is also the default if no suffix is provided.  'K' indicates
+                  kibibytes (1024 bytes).  'M' indicates mebibytes.  'G'
+                  indicates gibibytes, and 'T' indicates tebibytes."""
     )
 
     p.add_argument("paths",
@@ -52,11 +57,9 @@ def get_arg_parser():
         type=dupescan.units.parse_byte_count,
         default=0,
         metavar="SIZE",
-        help="""Specifies the size in bytes of each buffer used when comparing
-                files by content. Numbers beginning with "0x" are interpreted
-                as hexadecimal. A suffix can also be specified, indicating the
-                units: B=bytes (the default if omitted), K=kibibytes,
-                M=mebibytes, G=gibibytes. The default size is 4096."""
+        help="""Specifies the size of each buffer used when comparing files by
+                content. This option accepts a byte count.  The default is
+                4096."""
     )
 
     p.add_argument("-p", "--prefer",
