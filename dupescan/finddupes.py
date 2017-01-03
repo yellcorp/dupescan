@@ -10,6 +10,8 @@ import time
 __all__ = [ "execute_report", "scan", "run" ] 
 
 
+SIZE_NOT_SET = -1
+
 def get_arg_parser():
     p = argparse.ArgumentParser(
         description="Find files with identical content.",
@@ -35,7 +37,8 @@ def get_arg_parser():
     p.add_argument("-z", "--zero",
         action="store_true",
         help="""Include zero-length files. All zero-length files are considered
-                to have identical content."""
+                to have identical content. This option is equivalent to
+                --min-size 0"""
     )
 
     p.add_argument("-a", "--aliases",
@@ -53,9 +56,17 @@ def get_arg_parser():
         help="""Recurse into subdirectories."""
     )
 
+    p.add_argument("-m", "--min-size",
+        type=dupescan.units.parse_byte_count,
+        default=SIZE_NOT_SET,
+        metavar="SIZE",
+        help="""Ignore files smaller than %(metavar)s. This option accepts a
+                byte count. The default is 1."""
+    )
+
     p.add_argument("--buffer-size",
         type=dupescan.units.parse_byte_count,
-        default=0,
+        default=SIZE_NOT_SET,
         metavar="SIZE",
         help="""Specifies the size of each buffer used when comparing files by
                 content. This option accepts a byte count.  The default is
@@ -176,16 +187,16 @@ def and_funcs(f, g):
     return h
 
 
-def create_walker(paths, recurse=False, include_empty_files=False, include_symlinks=False):
-    zero_filter = None
-    if not include_empty_files:
-        zero_filter = lambda f: os.stat(f).st_size > 0
+def create_walker(paths, recurse=False, min_file_size=1, include_symlinks=False):
+    file_size_filter = None
+    if min_file_size > 0:
+        file_size_filter = lambda f: os.stat(f).st_size >= min_file_size
 
     symlink_filter = None
     if not include_symlinks:
         symlink_filter = lambda f: not os.path.islink(f)
 
-    file_filter = and_funcs(symlink_filter, zero_filter)
+    file_filter = and_funcs(symlink_filter, file_size_filter)
     dir_filter = symlink_filter
 
     if recurse:
@@ -265,7 +276,7 @@ def execute_report(report_path, dry_run):
 def scan(
     paths,
     recurse=False,
-    include_empty_files=False,
+    min_file_size=1,
     include_symlinks=False,
     report_hardlinks=False,
     prefer=None,
@@ -273,7 +284,7 @@ def scan(
     buffer_size=0,
     log_time=False
 ):
-    walker = create_walker(paths, recurse, include_empty_files, include_symlinks)
+    walker = create_walker(paths, recurse, min_file_size, include_symlinks)
     reporter = create_reporter(prefer, report_hardlinks)
 
     start_time = time.time() if log_time else 0
@@ -307,12 +318,21 @@ def run(argv=None):
         return 0
 
     if args.execute is None:
+        min_file_size = 1
+        if args.zero:
+            if args.min_size > 0:
+                print("Conflicting arguments: --zero implies --min-size 0, but --min-size was also specified.")
+                return 1
+            min_file_size = 0
+        elif args.min_size != SIZE_NOT_SET:
+            min_file_size = args.min_size
+
         if args.dry_run:
             print("Warning: -n/--dry-run has no effect if -x/--execute is not specified.", file=sys.stderr)
         scan(
             paths=args.paths,
             recurse=args.recurse,
-            include_empty_files=args.zero,
+            min_file_size=min_file_size,
             include_symlinks=args.symlinks,
             report_hardlinks=args.aliases,
             prefer=args.prefer,
@@ -323,16 +343,19 @@ def run(argv=None):
         return 0
 
     else:
-        if any((
-            args.paths,
-            args.symlinks,
-            args.zero,
-            args.aliases,
-            args.recurse,
-            args.prefer,
-            args.buffer_size,
-            args.time
-        )):
+        if (
+            any(s != SIZE_NOT_SET for s in (args.min_size, args.buffer_size)) or
+            any((
+                args.paths,
+                args.symlinks,
+                args.zero,
+                args.aliases,
+                args.recurse,
+                args.prefer,
+                args.buffer_size,
+                args.time
+            ))
+        ):
             print("Only -n/--dry-run can be used with -x/--execute. All other options must be omitted.", file=sys.stderr)
             return 1
 

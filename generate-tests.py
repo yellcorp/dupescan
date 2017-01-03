@@ -66,6 +66,9 @@ def main():
     # some zero files
     write_files(b"", target_dir, "zero_{}", 5)
 
+    # some 1-byte files
+    write_files(b"1", target_dir, "one_{}", 2)
+
 
 if __name__ == "__main__":
     main()
