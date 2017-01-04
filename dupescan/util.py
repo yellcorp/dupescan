@@ -42,9 +42,9 @@ class DelimitedStringDict(collections.abc.MutableMapping):
                     node.branches[b] = DelimitedStringDict.Node()
                 else:
                     return None, leaf
-        
+
         return node, leaf
-    
+
     @property
     def separator(self):
         return self._separator
@@ -133,7 +133,7 @@ class DelimitedStringSet(collections.abc.MutableSet):
         # class code only accessess this method from instances, rather than
         # classes, although that's not documented
         return DelimitedStringSet(self.separator, iterable)
-    
+
     @property
     def separator(self):
         return self._dsd._separator
