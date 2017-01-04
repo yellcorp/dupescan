@@ -25,3 +25,11 @@ def recurse_iterator(paths, dir_path_filter=None, file_path_filter=None):
                         yield file_path
         elif file_path_filter(path):
             yield path
+
+
+def no_repeated_paths(path_iterator):
+    seen = set()
+    for p in path_iterator:
+        if p not in seen:
+            seen.add(p)
+            yield p

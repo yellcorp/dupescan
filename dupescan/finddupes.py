@@ -290,7 +290,7 @@ def scan(
     start_time = time.time() if log_time else 0
 
     for dupe_set in dupescan.find_duplicate_files(
-        walker,
+        dupescan.walk.no_repeated_paths(walker),
         collect_inodes=report_hardlinks,
         error_cb="print_stderr",
         log_cb="print_stderr" if verbose else None,
