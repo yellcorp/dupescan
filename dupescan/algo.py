@@ -120,6 +120,43 @@ def find_duplicate_files_by_content(file_instance_list, max_open_files, buffer_s
     log_cb("Content comparison end: completed={0} aborted={1}".format(completed, aborted))
 
 
+def enumerate_files(
+    path_iterator,
+    identify_instance,
+    unique_paths,
+    error_cb,
+    log_cb,
+):
+    seen = set()
+    size_index = collections.defaultdict(list)
+    file_count = 0
+    error_count = 0
+
+    log_cb("Start file enumeration")
+    for path in path_iterator:
+        if unique_paths:
+            if path in seen:
+                continue
+            seen.add(path)
+
+        file_count += 1
+        try:
+            stat = os.stat(path)
+            storage_id = identify_instance(path, stat)
+            size_index[stat.st_size].append((storage_id, path))
+        except EnvironmentError as ee:
+            error_count += 1
+            error_cb(path, ee)
+    log_cb("End file enumeration. file_count={0}, error_count={1}".format(file_count, error_count))
+    log_cb("Unique sizes: {0}".format(len(size_index)))
+
+    return [
+        (size, to_multimap(id_path_pairs))
+        for size, id_path_pairs in size_index.items()
+        if len(id_path_pairs) > 1
+    ]
+
+
 DEFAULT_BUFFER_SIZE = 4096
 def find_duplicate_files(
     path_iterator,
@@ -133,40 +170,13 @@ def find_duplicate_files(
     error_cb = resolve_handler(error_cb, "ignore", FILE_ERROR_HANDLERS)
     log_cb =   resolve_handler(log_cb,   "ignore", LOG_HANDLERS)
 
-    seen = set()
-    size_index = collections.defaultdict(list)
-
     if collect_inodes:
         get_id = UnixStorageId.from_path_stat # TODO: figure out equivalent for windows
     else:
         get_id = AnonymousStorageId.from_path_stat
 
-    log_cb("Start file enumeration")
-    file_count = 0
-    error_count = 0
-    for path in path_iterator:
-        if unique_paths:
-            if path in seen:
-                continue
-            seen.add(path)
-
-        file_count += 1
-        try:
-            stat = os.stat(path)
-            storage_id = get_id(path, stat)
-            size_index[stat.st_size].append((storage_id, path))
-        except EnvironmentError as ee:
-            error_count += 1
-            error_cb(path, ee)
-    log_cb("End file enumeration. file_count={0}, error_count={1}".format(file_count, error_count))
-    log_cb("Unique sizes: {0}".format(len(size_index)))
-
-    sets = [
-        (size, to_multimap(id_path_pairs))
-        for size, id_path_pairs in size_index.items()
-        if len(id_path_pairs) > 1
-    ]
-    log_cb("Sets: {0}".format(len(sets)))
+    sets = enumerate_files(path_iterator, get_id, unique_paths, error_cb, log_cb)
+    log_cb("Set count: {0}".format(len(sets)))
 
     if max_open_files is None or max_open_files <= 0:
         max_open_files = decide_max_open_files()
