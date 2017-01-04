@@ -6,20 +6,20 @@ import sys
 class ParseError(Exception):
     def __init__(self, message, position=None, length=None):
         Exception.__init__(self, message, position, length)
-        self._message = message
-        self._position = position
-        self._length = length
+        self.message = message
+        self.position = position
+        self.length = length
 
     @classmethod
     def create_from_token(cls, message, token):
         return cls(message, token.position, len(token.text))
 
     def __str__(self):
-        buf = [ self._message ]
-        if self._position is not None:
-            buf.append(" at position {}".format(self._position))
-            if self._length is not None and self._length > 1:
-                buf.append("-{}".format(self._position + self._length - 1))
+        buf = [ self.message ]
+        if self.position is not None:
+            buf.append(" at position {}".format(self.position))
+            if self.length is not None and self.length > 1:
+                buf.append("-{}".format(self.position + self.length - 1))
         return "".join(buf)
 
 

@@ -249,7 +249,7 @@ def create_reporter(prefer=None, report_hardlinks=False):
         try:
             selector = dupescan.criteria.parse_selector(prefer)
         except dupescan.criteria.ParseError as parse_error:
-            for line in highlight_sample(prefer, 78, parse_error._position, parse_error._length):
+            for line in highlight_sample(prefer, 78, parse_error.position, parse_error.length):
                 print(line, file=sys.stderr)
             raise
 
