@@ -58,12 +58,14 @@ def find_duplicate_files_by_content(file_instance_list, max_open_files, buffer_s
     completed = 0
     aborted = 0
 
-    def instance_to_stream(instance):
+    initial_set = [ ]
+    stream_to_instance = { }
+    for instance in file_instance_list:
         stream = pool.open(instance.path())
-        stream.memo = instance
-        return stream
+        initial_set.append(stream)
+        stream_to_instance[stream] = instance
 
-    current_sets = [ [ instance_to_stream(i) for i in file_instance_list ] ]
+    current_sets = [ initial_set ]
 
     while len(current_sets) > 0:
         compare_set = current_sets.pop()
@@ -103,11 +105,11 @@ def find_duplicate_files_by_content(file_instance_list, max_open_files, buffer_s
 
             of_interest = (
                 (complete and len(stream_set) > 1) or
-                (len(stream_set) == 1 and len(stream_set[0].memo.paths) > 1)
+                (len(stream_set) == 1 and len(stream_to_instance[stream_set[0]].paths) > 1)
             )
 
             if of_interest:
-                yield tuple(stream.memo for stream in stream_set)
+                yield tuple(stream_to_instance[stream] for stream in stream_set)
 
             if discard:
                 for stream in stream_set:

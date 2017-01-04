@@ -10,7 +10,6 @@ class StreamPool(object):
             self.path = path
             self._offset = offset
             self._handle = None
-            self.memo = None
 
         def _resume(self):
             assert self._handle is None, "Stream._resume called with open handle"
