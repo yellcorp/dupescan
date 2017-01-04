@@ -7,7 +7,7 @@ import os
 import sys
 
 
-__all__ = [ "correlate", "generate_report", "run" ] 
+__all__ = [ "correlate", "generate_report", "run" ]
 
 
 def get_arg_parser():
@@ -94,7 +94,7 @@ def correlate(root1, root2, verbose=False):
     ignore_symlinks = lambda f: not os.path.islink(f)
     for root, bit in ((root1, 1), (root2, 2)):
         for path in dupescan.walk.recurse_iterator((root,), ignore_symlinks, ignore_symlinks):
-            origin[path] |= bit 
+            origin[path] |= bit
 
     for dupe_set in dupescan.find_duplicate_files(
         iter_origin(),

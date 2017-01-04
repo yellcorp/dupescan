@@ -7,7 +7,7 @@ import sys
 import time
 
 
-__all__ = [ "execute_report", "scan", "run" ] 
+__all__ = [ "execute_report", "scan", "run" ]
 
 
 SIZE_NOT_SET = -1

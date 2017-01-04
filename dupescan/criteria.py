@@ -271,7 +271,7 @@ class SelectionRules(object):
 
     def pick(self, candidates):
         this_round = list(candidates)
-        
+
         for decide in self.decide_functions:
             if len(this_round) < 2:
                 break
@@ -284,7 +284,7 @@ class SelectionRules(object):
                     next_round = [ candidate ]
                 elif outcome == 0:
                     next_round.append(candidate)
-            
+
             this_round = next_round
 
         return tuple(this_round)

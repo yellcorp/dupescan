@@ -156,7 +156,7 @@ def parse_report(stream):
         elif path == "":
             # PROBLEM: NO PATH
             error = True
-        
+
         elif marker == " ":
             unmarked.append(path)
 

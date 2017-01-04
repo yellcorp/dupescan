@@ -28,7 +28,7 @@ class StreamPool(object):
         def close(self):
             self.suspend()
             self._offset = 0
-        
+
         def read(self, count):
             if self._handle is None:
                 self._resume()
@@ -49,11 +49,11 @@ class StreamPool(object):
                 # otherwise we have a SEEK_END, in which case we need to open
                 # the file, or an invalid argument, in which case it's better
                 # to just use fh.seek() 's error handling. either way we need
-                # to open the file and forward it to fh.seek(). 
+                # to open the file and forward it to fh.seek().
                 self._resume()
 
             self._handle.seek(offset, whence)
-        
+
         def tell(self):
             if self._handle is None:
                 return self._offset
