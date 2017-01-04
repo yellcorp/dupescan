@@ -1,5 +1,7 @@
 import os
 
+import dupescan.util
+
 
 def const_true(*args):
     return True
@@ -27,8 +29,10 @@ def recurse_iterator(paths, dir_path_filter=None, file_path_filter=None):
             yield path
 
 
-def no_repeated_paths(path_iterator):
-    seen = set()
+def no_repeated_paths(path_iterator, separator=None):
+    if separator is None:
+        separator = os.sep
+    seen = dupescan.util.DelimitedStringSet(separator)
     for p in path_iterator:
         if p not in seen:
             seen.add(p)
