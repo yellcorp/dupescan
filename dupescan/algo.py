@@ -123,22 +123,15 @@ def find_duplicate_files_by_content(file_instance_list, max_open_files, buffer_s
 def enumerate_files(
     path_iterator,
     identify_instance,
-    unique_paths,
     error_cb,
     log_cb,
 ):
-    seen = set()
     size_index = collections.defaultdict(list)
     file_count = 0
     error_count = 0
 
     log_cb("Start file enumeration")
     for path in path_iterator:
-        if unique_paths:
-            if path in seen:
-                continue
-            seen.add(path)
-
         file_count += 1
         try:
             stat = os.stat(path)
@@ -161,7 +154,6 @@ DEFAULT_BUFFER_SIZE = 4096
 def find_duplicate_files(
     path_iterator,
     collect_inodes=None,
-    unique_paths=False,
     max_open_files=None,
     error_cb=None,
     log_cb=None,
@@ -175,7 +167,7 @@ def find_duplicate_files(
     else:
         get_id = AnonymousStorageId.from_path_stat
 
-    sets = enumerate_files(path_iterator, get_id, unique_paths, error_cb, log_cb)
+    sets = enumerate_files(path_iterator, get_id, error_cb, log_cb)
     log_cb("Set count: {0}".format(len(sets)))
 
     if max_open_files is None or max_open_files <= 0:
