@@ -1,90 +1,231 @@
 import itertools
+import os
+import stat
+
+from dupescan import util
+
+
+def cache_prop(method):
+    key = method.__name__
+    def wrapped_method(self):
+        try:
+            return self._cache[key]
+        except KeyError:
+            result = method(self)
+            self._cache[key] = result
+            return result
+    return wrapped_method
+
+
+# pathlib.Path is hard (impossible?) to subclass, so here's a platform-neutral
+# partial re-do that also caches its result, and lets us tag it with extra info
+class FileEntry(object):
+    def __init__(self, path, root=None, root_index=None):
+        self._path = path
+        self._root = root
+        self._root_index = root_index
+
+        self._dirname = None
+        self._basename = None
+        self._barename = None
+        self._extension = None
+
+        self._cache = { }
+
+    def _copy_with_path(self, path):
+        return FileEntry(path, self._root, self._root_index)
+
+    def _split_path(self):
+        self._dirname, self._basename = os.path.split(self._path)
+        self._barename, self._extension = os.path.splitext(self._basename)
+
+    def __str__(self):
+        return str(self._path)
+
+    def __repr__(self):
+        return "%s(%r, %r, %r)" % (
+            type(self).__name__,
+            self._path,
+            self._root,
+            self._root_index
+        )
+
+    @property
+    def path(self):
+        return self._path
+
+    @property
+    def root(self):
+        return self._root
+
+    @property
+    def root_index(self):
+        return self._root_index
+
+    @property
+    def basename(self):
+        if self._basename is None:
+            self._split_path()
+        return self._basename
+
+    @property
+    def barename(self):
+        if self._barename is None:
+            self._split_path()
+        return self._barename
+
+    @property
+    def extension(self):
+        if self._extension is None:
+            self._split_path()
+        return self._extension
+
+    @property
+    @cache_prop
+    def parent(self):
+        if self._dirname is None:
+            self._split_path()
+        return self._copy_with_path(self._dirname)
+
+    def join(self, name):
+        return self._copy_with_path(os.path.join(self._path, str(name)))
+
+    def __truediv__(self, rhs):
+        if isinstance(rhs, (str, FileEntry)):
+            return self.join(rhs)
+        return NotImplemented
+
+    def __rtruediv__(self, lhs):
+        if isinstance(lhs, (str, FileEntry)):
+            return self._copy_with_path(
+                os.path.join(str(lhs), self._path)
+            )
+        return NotImplemented
+
+    @property
+    @cache_prop
+    def stat(self):
+        return os.stat(self._path)
+
+    @property
+    def size(self):
+        return self.stat.st_size
+
+    @property
+    def atime(self):
+        return self.stat.st_atime
+
+    @property
+    def ctime(self):
+        return self.stat.st_ctime
+
+    @property
+    def mtime(self):
+        return self.stat.st_mtime
+
+    @property
+    def is_file(self):
+        return stat.S_ISREG(self.stat.st_mode)
+
+    @property
+    def is_dir(self):
+        return stat.S_ISDIR(self.stat.st_mode)
+
+    @property
+    def is_symlink(self):
+        return stat.S_ISLNK(self.stat.st_mode)
 
 
 class FileContent(object):
-    def __init__(self, storage_id=None, path=None, paths=None):
-        if paths is not None and path is None:
-            self.paths = tuple(paths)
-        elif path is not None and paths is None:
-            self.paths = (path,)
-        else:
-            raise ValueError("Specify exactly one of either path or paths")
+    __slots__ = ("address", "entries")
 
-        self.storage_id = storage_id
+    def __init__(self, address, entries=None, entry=None):
+        self.address = address
+
+        entries_source = itertools.chain(
+            entries if entries is not None else [ ],
+            [ entry ] if entry is not None else [ ]
+        )
+
+        self.entries = tuple(entries_source)
 
     def __hash__(self):
-        return hash(self.paths) ^ hash(self.storage_id)
+        return hash(self.address) ^ hash(self.entries)
 
     def __eq__(self, other):
         return (
             isinstance(other, FileContent) and
-            self.paths == other.paths and
-            self.storage_id == other.storage_id
+            self.address == other.address and
+            self.entries == other.entries
         )
 
     def __str__(self):
-        return self.path()
+        if len(self.entries) >= 1:
+            return str(self.entries[0].path)
+        return ""
 
     def __repr__(self):
-        return "%s(%r, paths=%r)" % (type(self).__name__, self.storage_id, self.paths)
+        return "FileInstance(%r, entries=%r)" % (self.address, self.entries)
 
-    def path(self):
-        return self.paths[0]
-
-
-class AnonymousStorageId(object):
-    _counter = itertools.count(0)
-
-    def __init__(self):
-        self.number = next(self._counter)
-
-    def presentation_string(self):
+    @property
+    def entry(self):
+        if len(self.entries) >= 1:
+            return self.entries[0]
         return None
 
-    def __str__(self):
-        return "<AnonymousStorageId {0!r}>".format(self.number)
 
-    def __repr__(self):
-        return "AnonymousStorageId()"
-
-    def __hash__(self):
-        return hash(self.number)
-
-    def __eq__(self, other):
-        return (
-            isinstance(other, AnonymousStorageId) and
-            self.number == other.number
-        )
-
-    @classmethod
-    def from_path_stat(cls, path, stat):
-        return cls()
+def posix_address(entry):
+    entry_stat = entry.stat
+    return (entry_stat.st_dev, entry_stat.st_ino)
 
 
-class UnixStorageId(object):
-    def __init__(self, device_num, inode_num):
-        self.device_num = device_num
-        self.inode_num = inode_num
+# TODO
+# def windows_address_getter():
 
-    def presentation_string(self):
-        return str(self)
 
-    def __str__(self):
-        return "dev {0:#018x}, ino {1:#018x}".format(self.device_num, self.inode_num)
+def flat_iterator(paths, dir_entry_filter=None, file_entry_filter=None):
+    if dir_entry_filter is None:
+        dir_entry_filter = lambda _: True
 
-    def __repr__(self):
-        return "UnixStorageId({0!r}, {1!r})".format(self.device_num, self.inode_num)
+    if file_entry_filter is None:
+        file_entry_filter = lambda _: True
 
-    def __hash__(self):
-        return hash(self.device_num) ^ hash(self.inode_num)
+    for index, path in enumerate(paths):
+        entry = FileEntry(path, path, index)
+        if entry.is_file:
+            if file_entry_filter(entry):
+                yield entry
+        elif dir_entry_filter(entry):
+            yield entry
 
-    def __eq__(self, other):
-        return (
-            isinstance(other, UnixStorageId) and
-            self.device_num == other.device_num and
-            self.inode_num == other.inode_num
-        )
 
-    @classmethod
-    def from_path_stat(cls, path, stat):
-        return cls(stat.st_dev, stat.st_ino)
+def recurse_iterator(paths, dir_entry_filter=None, file_entry_filter=None):
+    if file_entry_filter is None:
+        file_entry_filter = lambda _: True
+
+    for root_index, root in enumerate(paths):
+        root_entry = FileEntry(root, root, root_index)
+        if root_entry.is_dir:
+            for parent, dirs, files in os.walk(root):
+                parent_entry = FileEntry(parent, root, root_index)
+                if dir_entry_filter:
+                    dirs[:] = [
+                        d for d in dirs
+                        if dir_entry_filter(parent_entry / d)
+                    ]
+
+                for f in files:
+                    file_entry = parent_entry / f
+                    if file_entry_filter(file_entry):
+                        yield file_entry
+
+        elif file_entry_filter(root_entry):
+            yield root_entry
+
+
+def unique_entries(entry_iter):
+    seen = util.DelimitedStringSet(os.sep)
+    for entry in entry_iter:
+        if entry.path not in seen:
+            seen.add(entry.path)
+            yield entry

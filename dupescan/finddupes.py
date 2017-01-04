@@ -1,7 +1,13 @@
-import dupescan
+from dupescan import (
+    __version__,
+    algo,
+    criteria,
+    fs,
+    report,
+    units,
+)
 
 import argparse
-import itertools
 import os
 import sys
 import time
@@ -57,7 +63,7 @@ def get_arg_parser():
     )
 
     p.add_argument("-m", "--min-size",
-        type=dupescan.units.parse_byte_count,
+        type=units.parse_byte_count,
         default=SIZE_NOT_SET,
         metavar="SIZE",
         help="""Ignore files smaller than %(metavar)s. This option accepts a
@@ -65,7 +71,7 @@ def get_arg_parser():
     )
 
     p.add_argument("--buffer-size",
-        type=dupescan.units.parse_byte_count,
+        type=units.parse_byte_count,
         default=SIZE_NOT_SET,
         metavar="SIZE",
         help="""Specifies the size of each buffer used when comparing files by
@@ -110,7 +116,7 @@ def get_arg_parser():
 
     p.add_argument("--version",
         action="version",
-        version="%(prog)s " + dupescan.__version__
+        version="%(prog)s " + __version__
     )
 
     return p
@@ -128,24 +134,21 @@ class Reporter(object):
         print(*args, file=self.output_stream)
 
     def handle_dupe_set(self, dupe_set):
-        file_size = os.stat(dupe_set[0].path()).st_size
-
         self.print("## Size: {file_size} Instances: {inst_count} Excess: {excess_size} Names: {name_count}".format(
             inst_count=len(dupe_set),
-            name_count=sum(len(content.paths) for content in dupe_set),
-            file_size=dupescan.units.format_byte_count(file_size),
-            excess_size=dupescan.units.format_byte_count(file_size * (len(dupe_set) - 1))
+            name_count=dupe_set.entry_count,
+            file_size=units.format_byte_count(dupe_set.content_size),
+            excess_size=units.format_byte_count(dupe_set.total_size - dupe_set.content_size)
         ))
 
-        selected_paths = set()
+        selected_entries = set()
         selected_contents = set()
         if self.selector_func is not None:
-            all_names = itertools.chain(*(content.paths for content in dupe_set))
             try:
-                selected_paths.update(self.selector_func.pick(all_names))
-                for content in dupe_set:
-                    if len(selected_paths.intersection(content.paths)) > 0:
-                        selected_contents.add(content)
+                selected_entries.update(self.selector_func.pick(dupe_set.all_entries()))
+                for instance in dupe_set:
+                    if len(selected_entries.intersection(instance.entries)) > 0:
+                        selected_contents.add(instance)
             except EnvironmentError as ee:
                 self.print("## Skipping selection due to error: {!s}".format(ee))
 
@@ -158,20 +161,20 @@ class Reporter(object):
         for index, content in enumerate(
             sorted(
                 dupe_set,
-                key=lambda i: len(i.paths), reverse=True
+                key=lambda c: len(c.entries), reverse=True
             )
         ):
             if content_header:
-                if len(content.paths) == 1:
+                if len(content.entries) == 1:
                     self.print("# Separate instances follow")
                     content_header = False
                 else:
                     self.print("# Instance {}".format(index + 1))
 
-            for path in sorted(content.paths):
+            for entry in sorted(content.entries, key=lambda e: e.path):
                 self.print("{keep_marker} {path}".format(
                     keep_marker=keep_marker if content in selected_contents else " ",
-                    path=dupescan.report.format_path(path)
+                    path=report.format_path(entry.path)
                 ))
         self.print()
 
@@ -188,26 +191,23 @@ def and_funcs(f, g):
 
 
 def create_walker(paths, recurse=False, min_file_size=1, include_symlinks=False):
+    ifunc = (
+        fs.recurse_iterator if recurse
+        else fs.flat_iterator
+    )
+
     file_size_filter = None
     if min_file_size > 0:
-        file_size_filter = lambda f: os.stat(f).st_size >= min_file_size
+        file_size_filter = lambda e: e.size > min_file_size
 
     symlink_filter = None
     if not include_symlinks:
-        symlink_filter = lambda f: not os.path.islink(f)
+        symlink_filter = lambda e: not e.is_symlink
 
     file_filter = and_funcs(symlink_filter, file_size_filter)
     dir_filter = symlink_filter
 
-    if recurse:
-        return dupescan.walk.recurse_iterator(paths, dir_filter, file_filter)
-    else:
-        return [
-            p for p in paths
-            if (
-                dir_filter(p) if os.path.isdir(p) else file_filter(p)
-            )
-        ]
+    return ifunc(paths, dir_filter, file_filter)
 
 
 def highlight_sample(sample, line_width, hl_pos, hl_length):
@@ -247,8 +247,8 @@ def create_reporter(prefer=None, report_hardlinks=False):
     selector = None
     if prefer:
         try:
-            selector = dupescan.criteria.parse_selector(prefer)
-        except dupescan.criteria.ParseError as parse_error:
+            selector = criteria.parse_selector(prefer)
+        except criteria.ParseError as parse_error:
             for line in highlight_sample(prefer, 78, parse_error.position, parse_error.length):
                 print(line, file=sys.stderr)
             raise
@@ -259,7 +259,7 @@ def create_reporter(prefer=None, report_hardlinks=False):
 def execute_report(report_path, dry_run):
     errors = False
     with open(report_path, "r") as report_stream:
-        for marked, unmarked in dupescan.report.parse_report(report_stream):
+        for marked, unmarked in report.parse_report(report_stream):
             if len(marked) > 0:
                 for path in unmarked:
                     print(path, end="")
@@ -289,8 +289,8 @@ def scan(
 
     start_time = time.time() if log_time else 0
 
-    for dupe_set in dupescan.find_duplicate_files(
-        dupescan.walk.no_repeated_paths(walker),
+    for dupe_set in algo.find_duplicate_files(
+        fs.unique_entries(walker),
         collect_inodes=report_hardlinks,
         error_cb="print_stderr",
         log_cb="print_stderr" if verbose else None,
@@ -299,7 +299,7 @@ def scan(
         reporter.handle_dupe_set(dupe_set)
 
     if log_time:
-        reporter.print("# Elapsed time: {}".format(dupescan.units.format_duration(time.time() - start_time)))
+        reporter.print("# Elapsed time: {}".format(units.format_duration(time.time() - start_time)))
 
 
 def run(argv=None):
