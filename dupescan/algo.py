@@ -1,4 +1,4 @@
-from .fs import FileInstance, AnonymousStorageId, UnixStorageId
+from .fs import FileContent, AnonymousStorageId, UnixStorageId
 from .resources import StreamPool, decide_max_open_files
 
 import collections
@@ -52,18 +52,18 @@ def resolve_handler(value, default, lookup):
     return value
 
 
-def find_duplicate_files_by_content(file_instance_list, max_open_files, buffer_size, error_cb, log_cb):
+def find_duplicate_content_in_size_set(file_content_list, max_open_files, buffer_size, error_cb, log_cb):
     pool = StreamPool(max_open_files)
 
     completed = 0
     aborted = 0
 
     initial_set = [ ]
-    stream_to_instance = { }
-    for instance in file_instance_list:
-        stream = pool.open(instance.path())
+    stream_to_content = { }
+    for content in file_content_list:
+        stream = pool.open(content.path())
         initial_set.append(stream)
-        stream_to_instance[stream] = instance
+        stream_to_content[stream] = content
 
     current_sets = [ initial_set ]
 
@@ -105,11 +105,11 @@ def find_duplicate_files_by_content(file_instance_list, max_open_files, buffer_s
 
             of_interest = (
                 (complete and len(stream_set) > 1) or
-                (len(stream_set) == 1 and len(stream_to_instance[stream_set[0]].paths) > 1)
+                (len(stream_set) == 1 and len(stream_to_content[stream_set[0]].paths) > 1)
             )
 
             if of_interest:
-                yield tuple(stream_to_instance[stream] for stream in stream_set)
+                yield tuple(stream_to_content[stream] for stream in stream_set)
 
             if discard:
                 for stream in stream_set:
@@ -122,7 +122,7 @@ def find_duplicate_files_by_content(file_instance_list, max_open_files, buffer_s
 
 def enumerate_files(
     path_iterator,
-    identify_instance,
+    identify_content,
     error_cb,
     log_cb,
 ):
@@ -135,7 +135,7 @@ def enumerate_files(
         file_count += 1
         try:
             stat = os.stat(path)
-            storage_id = identify_instance(path, stat)
+            storage_id = identify_content(path, stat)
             size_index[stat.st_size].append((storage_id, path))
         except EnvironmentError as ee:
             error_count += 1
@@ -177,20 +177,20 @@ def find_duplicate_files(
         buffer_size = DEFAULT_BUFFER_SIZE
 
     for size, id_index in sorted(sets, key=operator.itemgetter(0), reverse=True):
-        instances = [
-            FileInstance(storage_id=storage_id, paths=paths)
+        contents = [
+            FileContent(storage_id=storage_id, paths=paths)
             for storage_id, paths in id_index.items()
         ]
 
         if size == 0:
             log_cb("Skipping content comparison due to zero length")
-            yield tuple(instances)
+            yield tuple(contents)
 
-        elif len(instances) == 1:
+        elif len(contents) == 1:
             log_cb("Skipping content comparison due to single instance")
-            yield tuple(instances)
+            yield tuple(contents)
 
         else:
-            log_cb("Content comparison start: {0} instances of {1} bytes each".format(len(instances), size))
-            for same_contents_set in find_duplicate_files_by_content(instances, max_open_files, buffer_size, error_cb, log_cb):
+            log_cb("Content comparison start: {0} instances of {1} bytes each".format(len(contents), size))
+            for same_contents_set in find_duplicate_content_in_size_set(contents, max_open_files, buffer_size, error_cb, log_cb):
                 yield same_contents_set

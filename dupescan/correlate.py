@@ -104,8 +104,8 @@ def correlate(root1, root2, verbose=False):
         log_cb="print_stderr" if verbose else None
     ):
         partitions = [ [ ], [ ] ]
-        for instance in dupe_set:
-            path = instance.path()
+        for content in dupe_set:
+            path = content.path()
 
             if origin[path] & 1:
                 partitions[0].append(path)

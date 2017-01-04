@@ -132,45 +132,45 @@ class Reporter(object):
 
         self.print("## Size: {file_size} Instances: {inst_count} Excess: {excess_size} Names: {name_count}".format(
             inst_count=len(dupe_set),
-            name_count=sum(len(instance.paths) for instance in dupe_set),
+            name_count=sum(len(content.paths) for content in dupe_set),
             file_size=dupescan.units.format_byte_count(file_size),
             excess_size=dupescan.units.format_byte_count(file_size * (len(dupe_set) - 1))
         ))
 
         selected_paths = set()
-        selected_instances = set()
+        selected_contents = set()
         if self.selector_func is not None:
-            all_names = itertools.chain(*(instance.paths for instance in dupe_set))
+            all_names = itertools.chain(*(content.paths for content in dupe_set))
             try:
                 selected_paths.update(self.selector_func.pick(all_names))
-                for instance in dupe_set:
-                    if len(selected_paths.intersection(instance.paths)) > 0:
-                        selected_instances.add(instance)
+                for content in dupe_set:
+                    if len(selected_paths.intersection(content.paths)) > 0:
+                        selected_contents.add(content)
             except EnvironmentError as ee:
                 self.print("## Skipping selection due to error: {!s}".format(ee))
 
         keep_marker = (
-            SELECTION_MARKER_UNIQUE if len(selected_instances) == 1
+            SELECTION_MARKER_UNIQUE if len(selected_contents) == 1
             else SELECTION_MARKER_NONUNIQUE
         )
 
-        instance_header = self.show_hardlink_info
-        for index, instance in enumerate(
+        content_header = self.show_hardlink_info
+        for index, content in enumerate(
             sorted(
                 dupe_set,
                 key=lambda i: len(i.paths), reverse=True
             )
         ):
-            if instance_header:
-                if len(instance.paths) == 1:
+            if content_header:
+                if len(content.paths) == 1:
                     self.print("# Separate instances follow")
-                    instance_header = False
+                    content_header = False
                 else:
                     self.print("# Instance {}".format(index + 1))
 
-            for path in sorted(instance.paths):
+            for path in sorted(content.paths):
                 self.print("{keep_marker} {path}".format(
-                    keep_marker=keep_marker if instance in selected_instances else " ",
+                    keep_marker=keep_marker if content in selected_contents else " ",
                     path=dupescan.report.format_path(path)
                 ))
         self.print()

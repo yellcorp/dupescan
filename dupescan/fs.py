@@ -1,7 +1,7 @@
 import itertools
 
 
-class FileInstance(object):
+class FileContent(object):
     def __init__(self, storage_id=None, path=None, paths=None):
         if paths is not None and path is None:
             self.paths = tuple(paths)
@@ -17,7 +17,7 @@ class FileInstance(object):
 
     def __eq__(self, other):
         return (
-            isinstance(other, FileInstance) and
+            isinstance(other, FileContent) and
             self.paths == other.paths and
             self.storage_id == other.storage_id
         )
@@ -26,7 +26,7 @@ class FileInstance(object):
         return self.path()
 
     def __repr__(self):
-        return "FileInstance({0!r}, paths={1!r})".format(self.storage_id, self.paths)
+        return "%s(%r, paths=%r)" % (type(self).__name__, self.storage_id, self.paths)
 
     def path(self):
         return self.paths[0]
