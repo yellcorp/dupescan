@@ -298,15 +298,15 @@ def cancel_if_single_root(dupe_set):
 
 def scan(
     paths,
-    recurse=False,
-    only_mixed_roots=False,
-    min_file_size=1,
-    include_symlinks=False,
-    report_hardlinks=False,
-    prefer=None,
-    verbose=False,
-    buffer_size=0,
-    log_time=False
+    recurse = False,
+    only_mixed_roots = False,
+    min_file_size = 1,
+    include_symlinks = False,
+    report_hardlinks = False,
+    prefer = None,
+    verbose = False,
+    buffer_size = 0,
+    log_time = False
 ):
     walker = create_walker(paths, recurse, min_file_size, include_symlinks)
     reporter = create_reporter(prefer, report_hardlinks)
@@ -353,18 +353,20 @@ def run(argv=None):
 
         if args.dry_run:
             print("Warning: -n/--dry-run has no effect if -x/--execute is not specified.", file=sys.stderr)
+
         scan(
-            paths=args.paths,
-            recurse=args.recurse,
-            only_mixed_roots=args.only_mixed_roots,
-            min_file_size=min_file_size,
-            include_symlinks=args.symlinks,
-            report_hardlinks=args.aliases,
-            prefer=args.prefer,
-            verbose=args.verbose,
-            buffer_size=args.buffer_size,
-            log_time=args.time
+            paths = args.paths,
+            recurse = args.recurse,
+            only_mixed_roots = args.only_mixed_roots,
+            min_file_size = min_file_size,
+            include_symlinks = args.symlinks,
+            report_hardlinks = args.aliases,
+            prefer = args.prefer,
+            verbose = args.verbose,
+            buffer_size = args.buffer_size,
+            log_time = args.time
         )
+
         return 0
 
     else:
