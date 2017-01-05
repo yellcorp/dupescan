@@ -50,6 +50,23 @@ class FileEntry(object):
             self._root_index
         )
 
+    def __hash__(self, *args, **kwargs):
+        return (
+            hash(self._path) ^
+            hash(self._root) ^
+            hash(self._root_index)
+        )
+
+    def __eq__(self, other):
+        if not isinstance(other, FileEntry):
+            return NotImplemented
+
+        return (
+            self._path == other.path and
+            self._root == other.root and
+            self._root_index == other._root_index
+        )
+
     @property
     def path(self):
         return self._path
