@@ -42,6 +42,7 @@ class DelimitedStringDict(collections.abc.MutableMapping):
                     node.branches[b] = DelimitedStringDict.Node()
                 else:
                     return None, leaf
+            node = node.branches[b]
 
         return node, leaf
 
