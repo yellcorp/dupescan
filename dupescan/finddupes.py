@@ -211,7 +211,7 @@ def create_walker(paths, recurse=False, min_file_size=1, include_symlinks=False)
 
     file_size_filter = None
     if min_file_size > 0:
-        file_size_filter = lambda e: e.size > min_file_size
+        file_size_filter = lambda e: e.size >= min_file_size
 
     symlink_filter = None
     if not include_symlinks:
