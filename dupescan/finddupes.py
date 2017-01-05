@@ -29,7 +29,7 @@ def get_arg_parser():
     )
 
     p.add_argument("paths",
-        nargs="*",
+        nargs="+",
         metavar="PATH",
         help="""List of files to consider. Specify --recurse (-r) to also
                 consider the contents of directories."""
