@@ -13,8 +13,8 @@ def write_files(source, target_dir, template, num_copies):
     with open(master_path, "wb") as out_stream:
         out_stream.write(source)
 
-    for n in range(1, num_copies):
-        copy_path = os.path.join(target_dir, template.format(n))
+    for n in range(num_copies):
+        copy_path = os.path.join(target_dir, template.format(n + 1))
         print("Copying to {}".format(copy_path))
         shutil.copy(master_path, copy_path)
 
