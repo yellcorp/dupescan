@@ -17,7 +17,7 @@ CLI Usage
 finddupes
 ~~~~~~~~~
 
-usage: finddupes [-h] [-s] [-z] [-a] [-r] [-m SIZE] [--buffer-size SIZE]
+usage: finddupes [-h] [-s] [-z] [-a] [-r] [-o] [-m SIZE] [--buffer-size SIZE]
                  [-p CRITERIA] [--time] [--help-prefer] [-v] [-x PATH] [-n]
                  [--version]
                  [PATH [PATH ...]]
@@ -42,6 +42,17 @@ optional arguments:
                         preserve all paths pointing to a selected file when
                         the -p/--prefer option is used.
   -r, --recurse         Recurse into subdirectories.
+  -o, --only-mixed-roots
+                        Only show duplicate files if they arise from recursing
+                        into different root directories. This can speed
+                        operations if the only results of interest are whether
+                        duplicates exist between different filesystem
+                        hierarchies, rather than within a single one. Note
+                        that this only has a useful effect if -r/--recurse is
+                        specified and two or more paths are provided. If
+                        -r/--recurse is not specified, this option has no
+                        effect. If -r/--recurse is specified with only one
+                        path, no output will be produced.
   -m SIZE, --min-size SIZE
                         Ignore files smaller than SIZE. This option accepts a
                         byte count. The default is 1.
