@@ -62,6 +62,19 @@ def get_arg_parser():
         help="""Recurse into subdirectories."""
     )
 
+    p.add_argument("-o", "--only-mixed-roots",
+        action="store_true",
+        help="""Only show duplicate files if they arise from recursing into
+                different root directories. This can speed operations if the
+                only results of interest are whether duplicates exist between
+                different filesystem hierarchies, rather than within a single
+                one. Note that this only has a useful effect if -r/--recurse
+                is specified and two or more paths are provided. If -r/--recurse
+                is not specified, this option has no effect. If -r/--recurse
+                is specified with only one path, no output will be
+                produced."""
+    )
+
     p.add_argument("-m", "--min-size",
         type=units.parse_byte_count,
         default=SIZE_NOT_SET,
@@ -273,9 +286,20 @@ def execute_report(report_path, dry_run):
     return 2 if errors else 0
 
 
+def cancel_if_single_root(dupe_set):
+    roots = set(
+        entry.root_index
+        for content in dupe_set
+        for entry in content.entries
+    )
+
+    return len(roots) <= 1
+
+
 def scan(
     paths,
     recurse=False,
+    only_mixed_roots=False,
     min_file_size=1,
     include_symlinks=False,
     report_hardlinks=False,
@@ -294,7 +318,8 @@ def scan(
         collect_inodes=report_hardlinks,
         error_cb="print_stderr",
         log_cb="print_stderr" if verbose else None,
-        buffer_size=buffer_size
+        buffer_size=buffer_size,
+        cancel_func=cancel_if_single_root if only_mixed_roots else None
     ):
         reporter.handle_dupe_set(dupe_set)
 
@@ -331,6 +356,7 @@ def run(argv=None):
         scan(
             paths=args.paths,
             recurse=args.recurse,
+            only_mixed_roots=args.only_mixed_roots,
             min_file_size=min_file_size,
             include_symlinks=args.symlinks,
             report_hardlinks=args.aliases,
@@ -350,6 +376,7 @@ def run(argv=None):
                 args.zero,
                 args.aliases,
                 args.recurse,
+                args.only_mixed_roots,
                 args.prefer,
                 args.buffer_size,
                 args.time

@@ -241,7 +241,8 @@ def find_duplicate_files(
     max_open_files=None,
     error_cb=None,
     log_cb=None,
-    buffer_size=None
+    buffer_size=None,
+    cancel_func=None,
 ):
     error_cb = resolve_handler(error_cb, "ignore", FILE_ERROR_HANDLERS)
     log_cb =   resolve_handler(log_cb,   "ignore", LOG_HANDLERS)
@@ -273,5 +274,5 @@ def find_duplicate_files(
 
         else:
             log_cb("Content comparison start: {0} instances of {1} bytes each".format(len(contents), size))
-            for same_contents_set in find_duplicate_content_in_size_set(contents, max_open_files, buffer_size, error_cb, log_cb):
+            for same_contents_set in find_duplicate_content_in_size_set(contents, max_open_files, buffer_size, error_cb, log_cb, cancel_func):
                 yield same_contents_set
