@@ -1,15 +1,15 @@
+import argparse
+import collections
+import itertools
+import os
+import sys
+
 from dupescan import (
     __version__,
     algo,
     fs,
     report,
 )
-
-import argparse
-import collections
-import itertools
-import os
-import sys
 
 
 __all__ = [ "correlate", "generate_report", "run" ]

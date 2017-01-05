@@ -1,3 +1,9 @@
+import argparse
+import logging
+import os
+import sys
+import time
+
 from dupescan import (
     __version__,
     algo,
@@ -6,12 +12,6 @@ from dupescan import (
     report,
     units,
 )
-
-import argparse
-import os
-import sys
-import time
-import logging
 
 
 __all__ = [ "execute_report", "scan", "run" ]
