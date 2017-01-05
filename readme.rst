@@ -17,8 +17,9 @@ CLI Usage
 finddupes
 ~~~~~~~~~
 
-usage: finddupes [-h] [-s] [-z] [-a] [-r] [-p CRITERIA] [--help-prefer] [-v]
-                 [-x PATH] [-n] [--version]
+usage: finddupes [-h] [-s] [-z] [-a] [-r] [-m SIZE] [--buffer-size SIZE]
+                 [-p CRITERIA] [--time] [--help-prefer] [-v] [-x PATH] [-n]
+                 [--version]
                  [PATH [PATH ...]]
 
 Find files with identical content.
@@ -31,7 +32,8 @@ optional arguments:
   -h, --help            show this help message and exit
   -s, --symlinks        Include symlinks.
   -z, --zero            Include zero-length files. All zero-length files are
-                        considered to have identical content.
+                        considered to have identical content. This option is
+                        equivalent to --min-size 0
   -a, --aliases         Check whether a single file has more than one name,
                         which is possible through hardlinks, as well as
                         symlinks if the -s/--symlinks option is specified.
@@ -40,11 +42,18 @@ optional arguments:
                         preserve all paths pointing to a selected file when
                         the -p/--prefer option is used.
   -r, --recurse         Recurse into subdirectories.
+  -m SIZE, --min-size SIZE
+                        Ignore files smaller than SIZE. This option accepts a
+                        byte count. The default is 1.
+  --buffer-size SIZE    Specifies the size of each buffer used when comparing
+                        files by content. This option accepts a byte count.
+                        The default is 4096.
   -p CRITERIA, --prefer CRITERIA
                         For each set of duplicate files, automatically select
                         one for preservation according to the provided
                         criteria. Other duplicates can be deleted by passing
                         the generated report to the -x/--execute option.
+  --time                Add elasped time to the generated report.
   --help-prefer         Display detailed help on using the --prefer option
   -v, --verbose         Log detailed information to STDERR.
   -x PATH, --execute PATH
@@ -54,6 +63,11 @@ optional arguments:
                         that --execute would perform without actually doing
                         them.
   --version             show program's version number and exit
+
+Arguments that accept byte counts accept an integer with an optional suffix
+indicating units. 'B' indicates bytes, which is also the default if no suffix
+is provided. 'K' indicates kibibytes (1024 bytes). 'M' indicates mebibytes.
+'G' indicates gibibytes, and 'T' indicates tebibytes.
 
 correlate
 ~~~~~~~~~
