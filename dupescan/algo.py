@@ -1,5 +1,5 @@
-from .fs import FileContent, posix_address
-from .resources import StreamPool, decide_max_open_files
+from dupescan.fs import FileContent, posix_address
+from dupescan.resources import StreamPool, decide_max_open_files
 
 import collections
 import operator
