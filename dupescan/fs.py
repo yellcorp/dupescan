@@ -174,7 +174,7 @@ class FileContent(object):
         return None
 
 
-def posix_address(entry):
+def posix_inode(entry):
     entry_stat = entry.stat
     return (entry_stat.st_dev, entry_stat.st_ino)
 

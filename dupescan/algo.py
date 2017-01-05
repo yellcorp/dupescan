@@ -1,182 +1,197 @@
-from dupescan.fs import FileContent, posix_address
-from dupescan.resources import StreamPool, decide_max_open_files
-
 import collections
+import logging
 import operator
-import sys
 
-
-def file_error_ignore(_path, _error):
-    pass
-
-def file_error_print_stderr(path, error):
-    print("{0!s}: {1!s}".format(path, error), file=sys.stderr)
-
-def file_error_raise(_path, error):
-    raise error
-
-FILE_ERROR_HANDLERS = {
-    "ignore":       file_error_ignore,
-    "print_stderr": file_error_print_stderr,
-    "raise":        file_error_raise
-}
-
-
-def log_ignore(_message):
-    pass
-
-def log_print_stderr(message):
-    print(message, file=sys.stderr)
-
-LOG_HANDLERS = {
-    "ignore":       log_ignore,
-    "print_stderr": log_print_stderr,
-}
-
-
-def to_multimap(pairs):
-    result = collections.defaultdict(list)
-    for key, value in pairs:
-        result[key].append(value)
-    return result
-
-
-def resolve_handler(value, default, lookup):
-    if value is None:
-        value = default
-
-    if isinstance(value, str):
-        return lookup[value]
-
-    return value
-
-
-ContentStreamPair = collections.namedtuple(
-    "ContentStreamPair", (
-        "content",
-        "stream",
-    )
+from dupescan.fs import FileContent
+from dupescan.resources import (
+    StreamPool,
+    decide_max_open_files,
 )
 
 
-class DuplicateContentSet(tuple):
-    def all_entries(self):
-        for content in self:
-            for entry in content.entries:
-                yield entry
-
-    @property
-    def content_size(self):
-        for entry in self.all_entries():
-            return entry.size
-
-    @property
-    def total_size(self):
-        return self.content_size * len(self)
-
-    @property
-    def entry_count(self):
-        return sum(len(content.entries) for content in self)
-
-    @classmethod
-    def _from_cs_set(cls, cs_iter):
-        return cls(cs.content for cs in cs_iter)
+__all__ = (
+    "DuplicateFinder",
+    "DuplicateContentSet",
+)
 
 
-# TODO: cancel_func can, for example, cancel a comparison if all content.entries[].root_index are identical
-# because something i've wanted to do is compare only between roots, not within them
-def find_duplicate_content_in_size_set(file_content_list, max_open_files, buffer_size, error_cb, log_cb, cancel_func=None):
-    completed = 0
-    early_out = 0
-    canceled = 0
+def noop(*args, **kwargs):
+    pass
 
-    pool = StreamPool(max_open_files)
 
-    initial_set = [
-        ContentStreamPair(content, pool.open(content.entry.path))
-        for content in file_content_list
-    ]
+def log_error(error, path=None):
+    template = "%(path)s: %(error)s" if path is not None else "%(error)s"
+    logging.error(template, locals())
 
-    current_sets = [ initial_set ]
 
-    while len(current_sets) > 0:
-        compare_set = current_sets.pop()
+DEFAULT_BUFFER_SIZE = 4096
+class DuplicateFinder(object):
+    def __init__(
+        self,
+        content_key_func = None,
+        max_open_files = None,
+        buffer_size = None,
+        cancel_func = None,
+        on_error = None,
+    ):
+        self._content_key_func = content_key_func
 
-        cancel = False
-        if cancel_func is not None:
-            cancel = cancel_func(DuplicateContentSet._from_cs_set(compare_set))
+        if max_open_files is not None and max_open_files >= 1:
+            self._max_open_files = max_open_files
+        else:
+            self._max_open_files = decide_max_open_files()
 
-        if cancel:
-            canceled += 1
-            for cs in compare_set:
-                cs.stream.close()
-            continue
+        if buffer_size is not None and buffer_size >= 1:
+            self._buffer_size = buffer_size
+        else:
+            self._buffer_size = DEFAULT_BUFFER_SIZE
 
-        buffers = [ ]
-        next_sets = [ ]
+        self._cancel_func = cancel_func
 
-        for cs_pair in compare_set:
-            stream = cs_pair.stream
+        if on_error is not None:
+            self._on_error = on_error
+        else:
+            self._on_error = noop
+
+    def __call__(self, entry_iter):
+        sets = self._collect_size_sets(entry_iter)
+        logging.debug("Set count: %d", len(sets))
+        for _, contents in sorted(sets, key=operator.itemgetter(0), reverse=True):
+            for same_contents_set in self._search_content_in_size_set(contents):
+                yield same_contents_set
+
+    def _collect_size_sets(self, entry_iter):
+        file_count = 0
+        error_count = 0
+
+        if self._content_key_func is None:
+            indexer = AddressIgnorer()
+        else:
+            indexer = AddressIndexer(self._content_key_func)
+
+        logging.debug("Start file enumeration")
+        for entry in entry_iter:
+            file_count += 1
             try:
-                buffer = stream.read(buffer_size)
-            except EnvironmentError as read_error:
-                error_path = stream.entry
-                error_cb(error_path, read_error)
-                try:
-                    stream.close()
-                except EnvironmentError as close_error:
-                    error_cb(error_path, close_error)
-                continue
+                indexer.add(entry)
+            except EnvironmentError as environment_error:
+                error_count += 1
+                log_error(environment_error, entry.path)
+                self._on_error(environment_error, entry.path)
 
-            try:
-                next_set = next_sets[buffers.index(buffer)]
-            except ValueError:
-                buffers.append(buffer)
-                next_set = [ ]
-                next_sets.append(next_set)
+        logging.debug(
+            "End file enumeration. file_count=%d, error_count=%d",
+            file_count, error_count,
+        )
 
-            next_set.append(cs_pair)
+        return list(indexer.sets())
 
-        for buffer, compare_set in zip(buffers, next_sets):
-            complete = len(buffer) == 0
+    def _search_content_in_size_set(self, file_content_iter):
+        stats = dict(completed=0, early_out=0, canceled=0)
 
-            close_set = False
-            if complete:
-                close_set = True
-                completed += 1
+        pool = StreamPool(self._max_open_files)
 
-            elif len(compare_set) <= 1:
-                close_set = True
-                early_out += 1
+        initial_set = [
+            ContentStreamPair(content, pool.open(content.entry.path))
+            for content in file_content_iter
+        ]
 
-            of_interest = (
-                not cancel and (
+        current_sets = [ initial_set ]
+
+        while len(current_sets) > 0:
+            compare_set = current_sets.pop()
+            assert len(compare_set) > 0, "len(compare_set) <= 0"
+
+            if self._cancel_func is not None:
+                if self._cancel_func(DuplicateContentSet._from_cs_set(compare_set)):
+                    stats["canceled"] += 1
+                    for cs in compare_set:
+                        cs.stream.close()
+                    continue
+
+            buffers = [ ]
+            next_sets = [ ]
+
+            if compare_set[0].content.entry.size == 0:
+                # files are zero length, so we know every one is going to result in a read
+                # of b"". skip it
+                buffers.append(b"")
+                next_sets.append(compare_set)
+
+            elif len(compare_set) == 1:
+                # in this case there is just one actual file, and we know there's more than
+                # one hard/symlink to it otherwise it would've been filtered out earlier.
+                # in this case, pretend we read any non-empty string (huge hack alert) and leave the set
+                # unchanged.
+                buffers.append(b"dummy") # big ol hack
+                next_sets.append(compare_set)
+
+            else:
+                # otherwise do it properly and don't skip bits
+                for cs_pair in compare_set:
+                    stream = cs_pair.stream
+                    try:
+                        buffer = stream.read(self._buffer_size)
+                    except EnvironmentError as read_error:
+                        log_error(read_error, stream.content.entry.path)
+                        self._on_error(read_error, stream.content.entry.path)
+                        try:
+                            stream.close()
+                        except EnvironmentError as close_error:
+                            log_error(close_error, stream.content.entry.path)
+                            self._on_error(close_error, stream.content.entry.path)
+                        continue
+
+                    try:
+                        next_set = next_sets[buffers.index(buffer)]
+                    except ValueError:
+                        buffers.append(buffer)
+                        next_set = [ ]
+                        next_sets.append(next_set)
+
+                    next_set.append(cs_pair)
+
+            for buffer, compare_set in zip(buffers, next_sets):
+                complete = len(buffer) == 0
+
+                close_set = False
+                if complete:
+                    close_set = True
+                    stats["completed"] += 1
+
+                elif len(compare_set) <= 1:
+                    close_set = True
+                    stats["early_out"] += 1
+
+                of_interest = (
                     (len(compare_set) >  1 and complete) or
                     (len(compare_set) == 1 and len(compare_set[0].content.entries) > 1)
                 )
-            )
 
-            if of_interest:
-                yield DuplicateContentSet._from_cs_set(compare_set)
+                if of_interest:
+                    yield DuplicateContentSet._from_cs_set(compare_set)
 
-            if close_set:
-                for cs in compare_set:
-                    cs.stream.close()
+                if close_set:
+                    for cs in compare_set:
+                        cs.stream.close()
 
-            else:
-                current_sets.append(compare_set)
+                else:
+                    current_sets.append(compare_set)
 
-    log_cb("Content comparison end: completed=%d early_out=%d canceled=%d" % (completed, early_out, canceled))
+        logging.debug(
+            "Content comparison end: completed=%(completed)d early_out=%(early_out)d canceled=%(canceled)d",
+            stats,
+        )
 
 
 class AddressIndexer(object):
-    def __init__(self, address_func):
-        self._address_func = address_func
+    def __init__(self, content_key_func):
+        self._content_key_func = content_key_func
         self._size_index = collections.defaultdict(list)
 
     def add(self, entry):
-        address = self._address_func(entry)
-        self._size_index[entry.size].append((address, entry))
+        key = self._content_key_func(entry)
+        self._size_index[entry.size].append((key, entry))
 
     def sets(self):
         for size, addr_entry_pairs in self._size_index.items():
@@ -205,74 +220,33 @@ class AddressIgnorer(object):
                 yield size, [ FileContent(address=None, entry=entry) for entry in entries ]
 
 
-def collect_size_sets(
-    entry_iterator,
-    address_func,
-    error_cb,
-    log_cb,
-):
-    size_index = collections.defaultdict(list)
-    file_count = 0
-    error_count = 0
+class DuplicateContentSet(tuple):
+    def all_entries(self):
+        for content in self:
+            for entry in content.entries:
+                yield entry
 
-    if address_func is None:
-        indexer = AddressIgnorer()
-    else:
-        indexer = AddressIndexer(address_func)
+    @property
+    def content_size(self):
+        for entry in self.all_entries():
+            return entry.size
 
-    log_cb("Start file enumeration")
-    for entry in entry_iterator:
-        file_count += 1
-        try:
-            indexer.add(entry)
-        except EnvironmentError as ee:
-            error_count += 1
-            error_cb(entry.path, ee)
-    log_cb("End file enumeration. file_count={0}, error_count={1}".format(file_count, error_count))
-    log_cb("Unique sizes: {0}".format(len(size_index)))
+    @property
+    def total_size(self):
+        return self.content_size * len(self)
 
-    return list(indexer.sets())
+    @property
+    def entry_count(self):
+        return sum(len(content.entries) for content in self)
+
+    @classmethod
+    def _from_cs_set(cls, cs_iter):
+        return cls(cs.content for cs in cs_iter)
 
 
-DEFAULT_BUFFER_SIZE = 4096
-def find_duplicate_files(
-    entry_iterator,
-    collect_inodes=None,
-    max_open_files=None,
-    error_cb=None,
-    log_cb=None,
-    buffer_size=None,
-    cancel_func=None,
-):
-    error_cb = resolve_handler(error_cb, "ignore", FILE_ERROR_HANDLERS)
-    log_cb =   resolve_handler(log_cb,   "ignore", LOG_HANDLERS)
-
-    if collect_inodes:
-        get_id = posix_address # TODO: figure out equivalent for windows
-    else:
-        get_id = None
-
-    sets = collect_size_sets(entry_iterator, get_id, error_cb, log_cb)
-    log_cb("Set count: {0}".format(len(sets)))
-
-    if max_open_files is None or max_open_files <= 0:
-        max_open_files = decide_max_open_files()
-
-    if buffer_size is None or buffer_size <= 0:
-        buffer_size = DEFAULT_BUFFER_SIZE
-
-    for size, contents in sorted(sets, key=operator.itemgetter(0), reverse=True):
-        # todo: for cancel_func to behave consistently, we will have to move these early-outs
-        # into find_duplicate_content_in_size_set
-        if size == 0:
-            log_cb("Skipping content comparison due to zero length")
-            yield DuplicateContentSet(contents)
-
-        elif len(contents) == 1:
-            log_cb("Skipping content comparison due to single instance")
-            yield DuplicateContentSet(contents)
-
-        else:
-            log_cb("Content comparison start: {0} instances of {1} bytes each".format(len(contents), size))
-            for same_contents_set in find_duplicate_content_in_size_set(contents, max_open_files, buffer_size, error_cb, log_cb, cancel_func):
-                yield same_contents_set
+ContentStreamPair = collections.namedtuple(
+    "ContentStreamPair", (
+        "content",
+        "stream",
+    )
+)

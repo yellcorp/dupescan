@@ -11,6 +11,7 @@ import argparse
 import os
 import sys
 import time
+import logging
 
 
 __all__ = [ "execute_report", "scan", "run" ]
@@ -308,19 +309,22 @@ def scan(
     buffer_size = 0,
     log_time = False
 ):
-    walker = create_walker(paths, recurse, min_file_size, include_symlinks)
+    # TODO: proper logging
+    logging.basicConfig(level="DEBUG")
+
+    entry_iter = create_walker(paths, recurse, min_file_size, include_symlinks)
+    content_indexer = fs.posix_inode if include_symlinks else None # todo: windows hardlink detector
     reporter = create_reporter(prefer, report_hardlinks)
+
+    find_dupes = algo.DuplicateFinder(
+        content_key_func = content_indexer,
+        buffer_size = buffer_size,
+        cancel_func = cancel_if_single_root if only_mixed_roots else None,
+    )
 
     start_time = time.time() if log_time else 0
 
-    for dupe_set in algo.find_duplicate_files(
-        fs.unique_entries(walker),
-        collect_inodes=report_hardlinks,
-        error_cb="print_stderr",
-        log_cb="print_stderr" if verbose else None,
-        buffer_size=buffer_size,
-        cancel_func=cancel_if_single_root if only_mixed_roots else None
-    ):
+    for dupe_set in find_dupes(fs.unique_entries(entry_iter)):
         reporter.handle_dupe_set(dupe_set)
 
     if log_time:
