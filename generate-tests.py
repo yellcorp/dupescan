@@ -70,7 +70,7 @@ def main():
 
     # some 1-byte files
     write_files(b"1", root_a, "one_{}", 2)
-    
+
     # test only-across-roots option
     buf = bytearray(b"R" * SMALL_SIZE)
     write_files(buf, root_a, "oar_a_{}", 0)
