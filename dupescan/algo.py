@@ -1,19 +1,18 @@
-from .fs import FileInstance, AnonymousStorageId, UnixStorageId
-from .resources import StreamPool, decide_max_open_files
+from dupescan.fs import FileContent, posix_address
+from dupescan.resources import StreamPool, decide_max_open_files
 
 import collections
 import operator
-import os
 import sys
 
 
-def file_error_ignore(path, error):
+def file_error_ignore(_path, _error):
     pass
 
 def file_error_print_stderr(path, error):
     print("{0!s}: {1!s}".format(path, error), file=sys.stderr)
 
-def file_error_raise(path, error):
+def file_error_raise(_path, error):
     raise error
 
 FILE_ERROR_HANDLERS = {
@@ -23,7 +22,7 @@ FILE_ERROR_HANDLERS = {
 }
 
 
-def log_ignore(message):
+def log_ignore(_message):
     pass
 
 def log_print_stderr(message):
@@ -52,31 +51,76 @@ def resolve_handler(value, default, lookup):
     return value
 
 
-def find_duplicate_files_by_content(file_instance_list, max_open_files, buffer_size, error_cb, log_cb):
+ContentStreamPair = collections.namedtuple(
+    "ContentStreamPair", (
+        "content",
+        "stream",
+    )
+)
+
+
+class DuplicateContentSet(tuple):
+    def all_entries(self):
+        for content in self:
+            for entry in content.entries:
+                yield entry
+
+    @property
+    def content_size(self):
+        for entry in self.all_entries():
+            return entry.size
+
+    @property
+    def total_size(self):
+        return self.content_size * len(self)
+
+    @property
+    def entry_count(self):
+        return sum(len(content.entries) for content in self)
+
+    @classmethod
+    def _from_cs_set(cls, cs_iter):
+        return cls(cs.content for cs in cs_iter)
+
+
+# TODO: cancel_func can, for example, cancel a comparison if all content.entries[].root_index are identical
+# because something i've wanted to do is compare only between roots, not within them
+def find_duplicate_content_in_size_set(file_content_list, max_open_files, buffer_size, error_cb, log_cb, cancel_func=None):
+    completed = 0
+    early_out = 0
+    canceled = 0
+
     pool = StreamPool(max_open_files)
 
-    completed = 0
-    aborted = 0
-
-    initial_set = [ ]
-    stream_to_instance = { }
-    for instance in file_instance_list:
-        stream = pool.open(instance.path())
-        initial_set.append(stream)
-        stream_to_instance[stream] = instance
+    initial_set = [
+        ContentStreamPair(content, pool.open(content.entry.path))
+        for content in file_content_list
+    ]
 
     current_sets = [ initial_set ]
 
     while len(current_sets) > 0:
         compare_set = current_sets.pop()
-        new_chunks = [ ]
-        new_sets = [ ]
 
-        for stream in compare_set:
+        cancel = False
+        if cancel_func is not None:
+            cancel = cancel_func(DuplicateContentSet._from_cs_set(compare_set))
+
+        if cancel:
+            canceled += 1
+            for cs in compare_set:
+                cs.stream.close()
+            continue
+
+        buffers = [ ]
+        next_sets = [ ]
+
+        for cs_pair in compare_set:
+            stream = cs_pair.stream
             try:
-                chunk = stream.read(buffer_size)
+                buffer = stream.read(buffer_size)
             except EnvironmentError as read_error:
-                error_path = stream.path
+                error_path = stream.entry
                 error_cb(error_path, read_error)
                 try:
                     stream.close()
@@ -85,44 +129,85 @@ def find_duplicate_files_by_content(file_instance_list, max_open_files, buffer_s
                 continue
 
             try:
-                new_set_index = new_chunks.index(chunk)
-                new_sets[new_set_index].append(stream)
+                next_set = next_sets[buffers.index(buffer)]
             except ValueError:
-                new_chunks.append(chunk)
-                new_sets.append([ stream ])
+                buffers.append(buffer)
+                next_set = [ ]
+                next_sets.append(next_set)
 
-        for chunk, stream_set in zip(new_chunks, new_sets):
-            complete = len(chunk) == 0
+            next_set.append(cs_pair)
 
-            discard = False
+        for buffer, compare_set in zip(buffers, next_sets):
+            complete = len(buffer) == 0
+
+            close_set = False
             if complete:
-                discard = True
+                close_set = True
                 completed += 1
 
-            elif len(stream_set) < 2:
-                discard = True
-                aborted += 1
+            elif len(compare_set) <= 1:
+                close_set = True
+                early_out += 1
 
             of_interest = (
-                (complete and len(stream_set) > 1) or
-                (len(stream_set) == 1 and len(stream_to_instance[stream_set[0]].paths) > 1)
+                not cancel and (
+                    (len(compare_set) >  1 and complete) or
+                    (len(compare_set) == 1 and len(compare_set[0].content.entries) > 1)
+                )
             )
 
             if of_interest:
-                yield tuple(stream_to_instance[stream] for stream in stream_set)
+                yield DuplicateContentSet._from_cs_set(compare_set)
 
-            if discard:
-                for stream in stream_set:
-                    stream.close()
+            if close_set:
+                for cs in compare_set:
+                    cs.stream.close()
+
             else:
-                current_sets.append(stream_set)
+                current_sets.append(compare_set)
 
-    log_cb("Content comparison end: completed={0} aborted={1}".format(completed, aborted))
+    log_cb("Content comparison end: completed=%d early_out=%d canceled=%d" % (completed, early_out, canceled))
 
 
-def enumerate_files(
-    path_iterator,
-    identify_instance,
+class AddressIndexer(object):
+    def __init__(self, address_func):
+        self._address_func = address_func
+        self._size_index = collections.defaultdict(list)
+
+    def add(self, entry):
+        address = self._address_func(entry)
+        self._size_index[entry.size].append((address, entry))
+
+    def sets(self):
+        for size, addr_entry_pairs in self._size_index.items():
+            if len(addr_entry_pairs) > 1:
+                yield size, list(self._collect_content(addr_entry_pairs))
+
+    @staticmethod
+    def _collect_content(addr_entry_pairs):
+        addr_lookup = collections.defaultdict(list)
+        for address, entry in addr_entry_pairs:
+            addr_lookup[address].append(entry)
+        for address, entries in addr_lookup.items():
+            yield FileContent(address=address, entries=entries)
+
+
+class AddressIgnorer(object):
+    def __init__(self):
+        self._size_index = collections.defaultdict(list)
+
+    def add(self, entry):
+        self._size_index[entry.size].append(entry)
+
+    def sets(self):
+        for size, entries in self._size_index.items():
+            if len(entries) > 1:
+                yield size, [ FileContent(address=None, entry=entry) for entry in entries ]
+
+
+def collect_size_sets(
+    entry_iterator,
+    address_func,
     error_cb,
     log_cb,
 ):
@@ -130,44 +215,44 @@ def enumerate_files(
     file_count = 0
     error_count = 0
 
+    if address_func is None:
+        indexer = AddressIgnorer()
+    else:
+        indexer = AddressIndexer(address_func)
+
     log_cb("Start file enumeration")
-    for path in path_iterator:
+    for entry in entry_iterator:
         file_count += 1
         try:
-            stat = os.stat(path)
-            storage_id = identify_instance(path, stat)
-            size_index[stat.st_size].append((storage_id, path))
+            indexer.add(entry)
         except EnvironmentError as ee:
             error_count += 1
-            error_cb(path, ee)
+            error_cb(entry.path, ee)
     log_cb("End file enumeration. file_count={0}, error_count={1}".format(file_count, error_count))
     log_cb("Unique sizes: {0}".format(len(size_index)))
 
-    return [
-        (size, to_multimap(id_path_pairs))
-        for size, id_path_pairs in size_index.items()
-        if len(id_path_pairs) > 1
-    ]
+    return list(indexer.sets())
 
 
 DEFAULT_BUFFER_SIZE = 4096
 def find_duplicate_files(
-    path_iterator,
+    entry_iterator,
     collect_inodes=None,
     max_open_files=None,
     error_cb=None,
     log_cb=None,
-    buffer_size=None
+    buffer_size=None,
+    cancel_func=None,
 ):
     error_cb = resolve_handler(error_cb, "ignore", FILE_ERROR_HANDLERS)
     log_cb =   resolve_handler(log_cb,   "ignore", LOG_HANDLERS)
 
     if collect_inodes:
-        get_id = UnixStorageId.from_path_stat # TODO: figure out equivalent for windows
+        get_id = posix_address # TODO: figure out equivalent for windows
     else:
-        get_id = AnonymousStorageId.from_path_stat
+        get_id = None
 
-    sets = enumerate_files(path_iterator, get_id, error_cb, log_cb)
+    sets = collect_size_sets(entry_iterator, get_id, error_cb, log_cb)
     log_cb("Set count: {0}".format(len(sets)))
 
     if max_open_files is None or max_open_files <= 0:
@@ -176,21 +261,18 @@ def find_duplicate_files(
     if buffer_size is None or buffer_size <= 0:
         buffer_size = DEFAULT_BUFFER_SIZE
 
-    for size, id_index in sorted(sets, key=operator.itemgetter(0), reverse=True):
-        instances = [
-            FileInstance(storage_id=storage_id, paths=paths)
-            for storage_id, paths in id_index.items()
-        ]
-
+    for size, contents in sorted(sets, key=operator.itemgetter(0), reverse=True):
+        # todo: for cancel_func to behave consistently, we will have to move these early-outs
+        # into find_duplicate_content_in_size_set
         if size == 0:
             log_cb("Skipping content comparison due to zero length")
-            yield tuple(instances)
+            yield DuplicateContentSet(contents)
 
-        elif len(instances) == 1:
+        elif len(contents) == 1:
             log_cb("Skipping content comparison due to single instance")
-            yield tuple(instances)
+            yield DuplicateContentSet(contents)
 
         else:
-            log_cb("Content comparison start: {0} instances of {1} bytes each".format(len(instances), size))
-            for same_contents_set in find_duplicate_files_by_content(instances, max_open_files, buffer_size, error_cb, log_cb):
+            log_cb("Content comparison start: {0} instances of {1} bytes each".format(len(contents), size))
+            for same_contents_set in find_duplicate_content_in_size_set(contents, max_open_files, buffer_size, error_cb, log_cb, cancel_func):
                 yield same_contents_set

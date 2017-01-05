@@ -1,4 +1,9 @@
-import dupescan
+from dupescan import (
+    __version__,
+    algo,
+    fs,
+    report,
+)
 
 import argparse
 import collections
@@ -70,7 +75,7 @@ def get_arg_parser():
 
     p.add_argument("--version",
         action="version",
-        version="%(prog)s " + dupescan.__version__
+        version="%(prog)s " + __version__
     )
 
     return p
@@ -93,10 +98,10 @@ def correlate(root1, root2, verbose=False):
 
     ignore_symlinks = lambda f: not os.path.islink(f)
     for root, bit in ((root1, 1), (root2, 2)):
-        for path in dupescan.walk.recurse_iterator((root,), ignore_symlinks, ignore_symlinks):
+        for path in fs.recurse_iterator((root,), ignore_symlinks, ignore_symlinks):
             origin[path] |= bit
 
-    for dupe_set in dupescan.find_duplicate_files(
+    for dupe_set in algo.find_duplicate_files(
         iter_origin(),
         collect_inodes=False,
         unique_paths=False,
@@ -104,8 +109,8 @@ def correlate(root1, root2, verbose=False):
         log_cb="print_stderr" if verbose else None
     ):
         partitions = [ [ ], [ ] ]
-        for instance in dupe_set:
-            path = instance.path()
+        for content in dupe_set:
+            path = content.path()
 
             if origin[path] & 1:
                 partitions[0].append(path)
@@ -197,14 +202,14 @@ def generate_report(
 
             if path1 is not None:
                 print(format_ansi_sgr(
-                    "{} {}".format(symbol, dupescan.report.format_path(path1)),
+                    "{} {}".format(symbol, report.format_path(path1)),
                     sgr_lookup[action]
                 ), file=file)
                 symbol = " "
 
             if path2 is not None:
                 print(format_ansi_sgr(
-                    "{} {}".format(symbol, dupescan.report.format_path(path2)),
+                    "{} {}".format(symbol, report.format_path(path2)),
                     sgr_lookup[action]
                 ), file=file)
 

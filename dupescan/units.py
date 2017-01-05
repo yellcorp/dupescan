@@ -19,6 +19,9 @@ class ParseError(ValueError):
 
 _FORMAT_BYTE_SUFFIXES = (" bytes", "K", "M", "G", "T")
 def format_byte_count(byte_count, float_precision=1):
+    # shut pylint up: given that the iterated var never changes, the loop
+    # always iterates through at least one entry
+    #pylint: disable=undefined-loop-variable
     for suffix in _FORMAT_BYTE_SUFFIXES:
         if byte_count < 1024:
             break

@@ -6,20 +6,20 @@ import sys
 class ParseError(Exception):
     def __init__(self, message, position=None, length=None):
         Exception.__init__(self, message, position, length)
-        self._message = message
-        self._position = position
-        self._length = length
+        self.message = message
+        self.position = position
+        self.length = length
 
     @classmethod
     def create_from_token(cls, message, token):
         return cls(message, token.position, len(token.text))
 
     def __str__(self):
-        buf = [ self._message ]
-        if self._position is not None:
-            buf.append(" at position {}".format(self._position))
-            if self._length is not None and self._length > 1:
-                buf.append("-{}".format(self._position + self._length - 1))
+        buf = [ self.message ]
+        if self.position is not None:
+            buf.append(" at position {}".format(self.position))
+            if self.length is not None and self.length > 1:
+                buf.append("-{}".format(self.position + self.length - 1))
         return "".join(buf)
 
 
@@ -99,26 +99,26 @@ class TokenGraph(object):
         return TokenGraph.Navigator(self.root)
 
 
-class PathProperty(object):
+class EntryProperty(object):
     def __init__(self, token_sequences, func):
         self.token_sequences = tuple(token_sequences)
         self.func = func
 
-    def evaluate(self, path):
-        return self.func(path)
+    def evaluate(self, entry):
+        return self.func(entry)
 
 def build_property_graph():
     graph = TokenGraph()
 
     for token_sequences, func in (
-        (["path"],                        str),
-        (["name"],                        os.path.basename),
-        (["dir/ectory"],                  os.path.dirname),
-        (["dir/ectory name"],             lambda p: os.path.basename(os.path.dirname(p))),
-        (["ext/ension"],                  lambda p: os.path.splitext(p)[1]),
-        (["mtime", "modification time?"], lambda p: os.stat(p).st_mtime)
+        (["path"],                        lambda p: p.path),
+        (["name"],                        lambda p: p.basename),
+        (["dir/ectory"],                  lambda p: p.parent.path),
+        (["dir/ectory name"],             lambda p: p.parent.path.basename),
+        (["ext/ension"],                  lambda p: p.extension),
+        (["mtime", "modification time?"], lambda p: p.mtime)
     ):
-        prop = PathProperty(token_sequences, func)
+        prop = EntryProperty(token_sequences, func)
         graph.add(prop.token_sequences, prop)
 
     return graph
@@ -496,10 +496,10 @@ class Parser(object):
         arg = self._argument()
         context = self._modifier()
 
-        def evaluate(path):
+        def evaluate(entry):
             return op.evaluate(
                 context,
-                prop.evaluate(path),
+                prop.evaluate(entry),
                 arg
             )
 
