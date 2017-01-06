@@ -9,6 +9,7 @@ from dupescan import (
     __version__,
     algo,
     fs,
+    log,
     report,
 )
 
@@ -107,8 +108,14 @@ def correlate(root1, root2, verbose=False):
         )
     )
 
+    logger = log.StreamLogger(
+        stream = sys.stderr,
+        min_level=log.DEBUG if verbose else log.INFO,
+    )
+
     find_dupes = algo.DuplicateFinder(
         # buffer_size = buffer_size,
+        logger = logger
     )
 
     for dupe_set in find_dupes(entry_iter):

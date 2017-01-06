@@ -1,5 +1,4 @@
 import argparse
-import logging
 import os
 import sys
 import time
@@ -9,6 +8,7 @@ from dupescan import (
     algo,
     criteria,
     fs,
+    log,
     report,
     units,
 )
@@ -309,17 +309,19 @@ def scan(
     buffer_size = 0,
     log_time = False
 ):
-    # TODO: proper logging
-    logging.basicConfig(level="DEBUG")
-
     entry_iter = create_walker(paths, recurse, min_file_size, include_symlinks)
     content_indexer = fs.posix_inode if include_symlinks else None # todo: windows hardlink detector
     reporter = create_reporter(prefer, report_hardlinks)
+    logger = log.StreamLogger(
+        stream = sys.stderr,
+        min_level=log.DEBUG if verbose else log.INFO,
+    )
 
     find_dupes = algo.DuplicateFinder(
         content_key_func = content_indexer,
         buffer_size = buffer_size,
         cancel_func = cancel_if_single_root if only_mixed_roots else None,
+        logger = logger
     )
 
     start_time = time.time() if log_time else 0

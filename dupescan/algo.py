@@ -1,8 +1,8 @@
 import collections
-import logging
 import operator
 
 from dupescan.fs import FileContent
+from dupescan.log import NullLogger
 from dupescan.resources import (
     StreamPool,
     decide_max_open_files,
@@ -19,11 +19,6 @@ def noop(*args, **kwargs):
     pass
 
 
-def log_error(error, path=None):
-    template = "%(path)s: %(error)s" if path is not None else "%(error)s"
-    logging.error(template, locals())
-
-
 DEFAULT_BUFFER_SIZE = 4096
 class DuplicateFinder(object):
     def __init__(
@@ -32,6 +27,7 @@ class DuplicateFinder(object):
         max_open_files = None,
         buffer_size = None,
         cancel_func = None,
+        logger = None,
         on_error = None,
     ):
         self._content_key_func = content_key_func
@@ -48,6 +44,11 @@ class DuplicateFinder(object):
 
         self._cancel_func = cancel_func
 
+        if logger is not None:
+            self._logger = logger
+        else:
+            self._logger = NullLogger()
+
         if on_error is not None:
             self._on_error = on_error
         else:
@@ -55,33 +56,38 @@ class DuplicateFinder(object):
 
     def __call__(self, entry_iter):
         sets = self._collect_size_sets(entry_iter)
-        logging.debug("Set count: %d", len(sets))
+        self._logger.debug("Set count: {}", len(sets))
         for _, contents in sorted(sets, key=operator.itemgetter(0), reverse=True):
             for same_contents_set in self._search_content_in_size_set(contents):
                 yield same_contents_set
 
+    def _log_error(self, error, path=None):
+        if path is None:
+            self._logger.error(str(error))
+        else:
+            self._logger.error("{path!s}: {error!s}", path=path, error=error)
+
     def _collect_size_sets(self, entry_iter):
-        file_count = 0
-        error_count = 0
+        stats = dict(files=0, errors=0)
 
         if self._content_key_func is None:
             indexer = AddressIgnorer()
         else:
             indexer = AddressIndexer(self._content_key_func)
 
-        logging.debug("Start file enumeration")
+        self._logger.debug("Start file enumeration")
         for entry in entry_iter:
-            file_count += 1
+            stats["files"] += 1
             try:
                 indexer.add(entry)
             except EnvironmentError as environment_error:
-                error_count += 1
-                log_error(environment_error, entry.path)
+                stats["errors"] += 1
+                self._log_error(environment_error, entry.path)
                 self._on_error(environment_error, entry.path)
 
-        logging.debug(
-            "End file enumeration. file_count=%d, error_count=%d",
-            file_count, error_count,
+        self._logger.debug(
+            "End file enumeration. files={files}, errors={errors}",
+            **stats
         )
 
         return list(indexer.sets())
@@ -133,12 +139,12 @@ class DuplicateFinder(object):
                     try:
                         buffer = stream.read(self._buffer_size)
                     except EnvironmentError as read_error:
-                        log_error(read_error, stream.content.entry.path)
+                        self._log_error(read_error, stream.content.entry.path)
                         self._on_error(read_error, stream.content.entry.path)
                         try:
                             stream.close()
                         except EnvironmentError as close_error:
-                            log_error(close_error, stream.content.entry.path)
+                            self._log_error(close_error, stream.content.entry.path)
                             self._on_error(close_error, stream.content.entry.path)
                         continue
 
@@ -178,9 +184,9 @@ class DuplicateFinder(object):
                 else:
                     current_sets.append(compare_set)
 
-        logging.debug(
-            "Content comparison end: completed=%(completed)d early_out=%(early_out)d canceled=%(canceled)d",
-            stats,
+        self._logger.debug(
+            "Content comparison end: completed={completed} early_out={early_out} canceled={canceled}",
+            **stats,
         )
 
 
