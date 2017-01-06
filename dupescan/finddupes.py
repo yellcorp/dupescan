@@ -28,7 +28,7 @@ def get_arg_parser():
     )
 
     p.add_argument("paths",
-        nargs="+",
+        nargs="*",
         metavar="PATH",
         help="""List of files to consider. Specify --recurse (-r) to also
                 consider the contents of directories."""
@@ -345,6 +345,10 @@ def run(argv=None):
 
         if args.dry_run:
             print("Warning: -n/--dry-run has no effect if -x/--execute is not specified.", file=sys.stderr)
+
+        if len(args.paths) == 0:
+            print("No paths specified")
+            return 1
 
         scan(
             paths = args.paths,
