@@ -116,7 +116,8 @@ def build_property_graph():
         (["dir/ectory"],                  lambda p: p.parent.path),
         (["dir/ectory name"],             lambda p: p.parent.path.basename),
         (["ext/ension"],                  lambda p: p.extension),
-        (["mtime", "modification time?"], lambda p: p.mtime)
+        (["mtime", "modification time?"], lambda p: p.mtime),
+        (["index"],                       lambda p: p.root_index + 1),
     ):
         prop = EntryProperty(token_sequences, func)
         graph.add(prop.token_sequences, prop)
@@ -163,7 +164,7 @@ def build_operator_graph():
         ("starts with",   ["start/s with?"],       "not starts with",   ["not start/s with?"],       lambda c, a, b: c.startswith(a, b),    str),
         ("ends with",     ["end/s with?"],         "not ends with",     ["not end/s with?"],         lambda c, a, b: c.endswith(a, b),      str),
         #("matches glob",  ["match/es glob"],       "not matches glob",  ["not match/es glob"],       ?,                                     str),
-        ("matches regex", ["match/es re|regex/p"], "not matches regex", ["not match/es re|regex/p"], lambda c, a, b: c.matches_regex(a, b), str)
+        ("matches regex", ["match/es re|regex/p"], "not matches regex", ["not match/es re|regex/p"], lambda c, a, b: c.matches_regex(a, b), str),
     ):
         positive = BinaryFunction(pos_name, pos_tokens, func, arg_type)
         graph.add(positive.token_sequences, positive)
@@ -193,7 +194,8 @@ def build_adjective_graph():
     for pos_word, neg_word, func, arg_type in (
         ("shorter",   "longer", lambda c, a, b: c.length(a) - c.length(b),               str),
         ("shallower", "deeper", lambda c, a, b: c.count(a, os.sep) - c.count(b, os.sep), str),
-        ("earlier",   "later",  lambda c, a, b: c.compare(a, b),                         None)
+        ("earlier",   "later",  lambda c, a, b: c.compare(a, b),                         None),
+        ("lower",     "higher", lambda c, a, b: c.compare(a, b),                         None),
     ):
         positive = BinaryFunction(pos_word, [pos_word], func, arg_type)
         graph.add(positive.token_sequences, positive)
@@ -203,9 +205,26 @@ def build_adjective_graph():
     return graph
 
 
+def coerce_operands(a, b):
+    """Return the two arguments coerced to a common class.
+
+    If one is int, then try to interpret the other as an int as well. If this
+    is successful, return both as ints. Otherwise, return both as strs.
+
+    If both are already strs then they are returned unchanged.
+    """
+    try:
+        if isinstance(a, int):
+            return a, int(b)
+        if isinstance(b, int):
+            return int(a), b
+    except ValueError:
+        pass
+    return str(a), str(b)
+
 class CaseSensitiveContext(object):
     def equals(self, a, b):
-        return a == b
+        return self.compare(a, b) == 0
 
     def contains(self, a, b):
         return b in a
@@ -226,17 +245,19 @@ class CaseSensitiveContext(object):
         return a.count(string)
 
     def compare(self, a, b):
-        if a < b:
+        ca, cb = coerce_operands(a, b)
+
+        if ca < cb:
             return -1
-        if a > b:
+        if ca > cb:
             return 1
         return 0
 
 
-class CaseInsensitiveContext(CaseSensitiveContext):
-    def equals(self, a, b):
-        return a.lower() == b.lower()
+def lower_if_str(a):
+    return a.lower() if isinstance(a, str) else a
 
+class CaseInsensitiveContext(CaseSensitiveContext):
     def contains(self, a, b):
         return b.lower() in a.lower()
 
@@ -256,7 +277,7 @@ class CaseInsensitiveContext(CaseSensitiveContext):
         return a.lower().count(string.lower())
 
     def compare(self, a, b):
-        return CaseSensitiveContext.compare(self, a.lower(), b.lower())
+        return CaseSensitiveContext.compare(self, lower_if_str(a), lower_if_str(b))
 
 
 def build_modifier_graph():

@@ -96,11 +96,16 @@ PROPERTY  : path
           | modification time
             The file's modification time.
 
+          | index
+			The position of the file on the command line, or the file's
+			ancestor directory if --recurse was used. The first file/directory
+			has an index of 1.
+
 OPERATOR  : is
-            Prefer strings that are equal to the argument.
+			Prefer strings/numbers that are equal to the argument.
 
           | is not
-            Prefer strings that are not equal to the argument.
+			Prefer strings/numbers that are not equal to the argument.
 
           | contains
             Prefer strings that contain the argument.
@@ -144,12 +149,16 @@ ADJECTIVE : shorter
             Prefer strings containing more directory separators.
 
           | earlier
+		  | lower
             When used with strings: prefer ones that appear earlier when sorted.
             When used with times: prefer earlier ones.
+			When used with numbers: prefer lower ones.
 
           | later
+		  | higher
             When used with strings: prefer ones that appear later when sorted.
             When used with times: prefer later ones.
+			When used with numbers: prefer higher ones.
 
 ARGUMENT  : BARE_STRING
             A sequence of characters terminated by the first unescaped space.
