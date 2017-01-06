@@ -4,8 +4,8 @@ import sys
 import time
 
 from dupescan import (
-    __version__,
     algo,
+    cli,
     criteria,
     fs,
     log,
@@ -16,8 +16,6 @@ from dupescan import (
 
 __all__ = [ "execute_report", "scan", "run" ]
 
-
-SIZE_NOT_SET = -1
 
 def get_arg_parser():
     p = argparse.ArgumentParser(
@@ -78,19 +76,10 @@ def get_arg_parser():
 
     p.add_argument("-m", "--min-size",
         type=units.parse_byte_count,
-        default=SIZE_NOT_SET,
+        default=None,
         metavar="SIZE",
         help="""Ignore files smaller than %(metavar)s. This option accepts a
                 byte count. The default is 1."""
-    )
-
-    p.add_argument("--buffer-size",
-        type=units.parse_byte_count,
-        default=SIZE_NOT_SET,
-        metavar="SIZE",
-        help="""Specifies the size of each buffer used when comparing files by
-                content. This option accepts a byte count.  The default is
-                4096."""
     )
 
     p.add_argument("-p", "--prefer",
@@ -128,10 +117,7 @@ def get_arg_parser():
                 --execute would perform without actually doing them."""
     )
 
-    p.add_argument("--version",
-        action="version",
-        version="%(prog)s " + __version__
-    )
+    cli.add_common_cli_args(p)
 
     return p
 
@@ -354,7 +340,7 @@ def run(argv=None):
                 print("Conflicting arguments: --zero implies --min-size 0, but --min-size was also specified.")
                 return 1
             min_file_size = 0
-        elif args.min_size != SIZE_NOT_SET:
+        elif args.min_size != None:
             min_file_size = args.min_size
 
         if args.dry_run:
@@ -376,20 +362,18 @@ def run(argv=None):
         return 0
 
     else:
-        if (
-            any(s != SIZE_NOT_SET for s in (args.min_size, args.buffer_size)) or
-            any((
-                args.paths,
-                args.symlinks,
-                args.zero,
-                args.aliases,
-                args.recurse,
-                args.only_mixed_roots,
-                args.prefer,
-                args.buffer_size,
-                args.time
-            ))
-        ):
+        if any((
+            args.paths,
+            args.symlinks,
+            args.zero,
+            args.aliases,
+            args.recurse,
+            args.only_mixed_roots,
+            args.min_size,
+            args.prefer,
+            args.buffer_size,
+            args.time
+        )):
             print("Only -n/--dry-run can be used with -x/--execute. All other options must be omitted.", file=sys.stderr)
             return 1
 

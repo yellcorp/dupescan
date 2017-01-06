@@ -17,10 +17,11 @@ CLI Usage
 finddupes
 ~~~~~~~~~
 
-usage: finddupes [-h] [-s] [-z] [-a] [-r] [-o] [-m SIZE] [--buffer-size SIZE]
-                 [-p CRITERIA] [--time] [--help-prefer] [-v] [-x PATH] [-n]
-                 [--version]
-                 [PATH [PATH ...]]
+
+usage: finddupes [-h] [-s] [-z] [-a] [-r] [-o] [-m SIZE] [-p CRITERIA]
+                 [--time] [--help-prefer] [-v] [-x PATH] [-n]
+                 [--buffer-size SIZE] [--version]
+                 PATH [PATH ...]
 
 Find files with identical content.
 
@@ -56,9 +57,6 @@ optional arguments:
   -m SIZE, --min-size SIZE
                         Ignore files smaller than SIZE. This option accepts a
                         byte count. The default is 1.
-  --buffer-size SIZE    Specifies the size of each buffer used when comparing
-                        files by content. This option accepts a byte count.
-                        The default is 4096.
   -p CRITERIA, --prefer CRITERIA
                         For each set of duplicate files, automatically select
                         one for preservation according to the provided
@@ -73,6 +71,9 @@ optional arguments:
   -n, --dry-run         Used in combination with -x/--execute. List actions
                         that --execute would perform without actually doing
                         them.
+  --buffer-size SIZE    Specifies the size of each buffer used when comparing
+                        files by content. This option accepts a byte count.
+                        The default is 4096.
   --version             show program's version number and exit
 
 Arguments that accept byte counts accept an integer with an optional suffix
@@ -259,28 +260,31 @@ correlate
 ~~~~~~~~~
 
 usage: correlate [-h] [-v] [-m] [-r] [-a] [-c] [--no-colorize] [--no-summary]
-                 [--version]
+                 [--buffer-size SIZE] [--version]
                  DIR DIR
 
 Compare two directories by content.
 
 positional arguments:
-  DIR             Paths to the directories to be compared.
+  DIR                 Paths to the directories to be compared.
 
 optional arguments:
-  -h, --help      show this help message and exit
-  -v, --verbose   Log detailed information to STDERR.
-  -m, --matches   List files that appear in both directories.
-  -r, --removes   List files that appear only as a descendant of the first
-                  directory.
-  -a, --adds      List files that appear only as a descendant of the second
-                  directory.
-  -c, --colorize  Colorize output.
-  --no-colorize   Force colorizing off. If neither --colorize or --no-colorize
-                  is specified, it will be enabled if a compatible terminal is
-                  detected.
-  --no-summary    Suppress the summary.
-  --version       show program's version number and exit
+  -h, --help          show this help message and exit
+  -v, --verbose       Log detailed information to STDERR.
+  -m, --matches       List files that appear in both directories.
+  -r, --removes       List files that appear only as a descendant of the first
+                      directory.
+  -a, --adds          List files that appear only as a descendant of the
+                      second directory.
+  -c, --colorize      Colorize output.
+  --no-colorize       Force colorizing off. If neither --colorize or --no-
+                      colorize is specified, it will be enabled if a
+                      compatible terminal is detected.
+  --no-summary        Suppress the summary.
+  --buffer-size SIZE  Specifies the size of each buffer used when comparing
+                      files by content. This option accepts a byte count. The
+                      default is 4096.
+  --version           show program's version number and exit
 
 If none of -m/--matches, -r/--removes, -a/--adds is specified, all are
 reported.

@@ -10,6 +10,7 @@ from dupescan.resources import (
 
 
 __all__ = (
+    "DEFAULT_BUFFER_SIZE",
     "DuplicateFinder",
     "DuplicateContentSet",
 )

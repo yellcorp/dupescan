@@ -6,8 +6,8 @@ import itertools
 import sys
 
 from dupescan import (
-    __version__,
     algo,
+    cli,
     fs,
     log,
     report,
@@ -75,10 +75,7 @@ def get_arg_parser():
         help="""Suppress the summary."""
     )
 
-    p.add_argument("--version",
-        action="version",
-        version="%(prog)s " + __version__
-    )
+    cli.add_common_cli_args(p)
 
     return p
 
@@ -95,7 +92,7 @@ def tap_iterator(member_function, input_iterator):
         yield member
 
 
-def correlate(root1, root2, verbose=False):
+def correlate(root1, root2, verbose=False, buffer_size=None):
     all_entries = set()
     ignore_symlinks = lambda e: not e.is_symlink
 
@@ -189,7 +186,8 @@ def generate_report(
     ansi=None, # None: autodetect, True: use default, False: no colors, or tuple of 3 things to appear between \x1b[ and m
     summary=True,
     verbose=False,
-    file=None
+    file=None,
+    buffer_size=None,
 ):
     if include_actions is None or len(include_actions) == 0:
         include_actions = set(Action)
@@ -203,7 +201,10 @@ def generate_report(
     sgr_lookup = interpret_ansi_param(ansi, file)
 
     action_count = collections.Counter()
-    for action, entry1, entry2 in correlate(root1, root2, verbose=verbose):
+
+    # TODO: ugh this is messy, combine the two functions,
+    # or make a config class/namedtuple, or both
+    for action, entry1, entry2 in correlate(root1, root2, verbose=verbose, buffer_size=buffer_size):
         action_count[action] += 1
 
         if action not in include_actions:
@@ -248,7 +249,8 @@ def run(argv=None):
         ansi=args.colorize,
         summary=not args.no_summary,
         verbose=args.verbose,
-        file=sys.stdout
+        file=sys.stdout,
+        buffer_size=args.buffer_size,
     )
 
     return 0
