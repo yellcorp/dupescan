@@ -1,10 +1,12 @@
 import collections
 import operator
 
-from dupescan.fs import FileContent
-from dupescan.log import NullLogger
-from dupescan.platform import decide_max_open_files, DEFAULT_BUFFER_SIZE
-from dupescan.streampool import StreamPool
+from dupescan import (
+    fs,
+    log,
+    platform,
+    streampool,
+)
 
 
 __all__ = (
@@ -32,19 +34,19 @@ class DuplicateFinder(object):
         if max_open_files is not None and max_open_files >= 1:
             self._max_open_files = max_open_files
         else:
-            self._max_open_files = decide_max_open_files()
+            self._max_open_files = platform.decide_max_open_files()
 
         if buffer_size is not None and buffer_size >= 1:
             self._buffer_size = buffer_size
         else:
-            self._buffer_size = DEFAULT_BUFFER_SIZE
+            self._buffer_size = platform.DEFAULT_BUFFER_SIZE
 
         self._cancel_func = cancel_func
 
         if logger is not None:
             self._logger = logger
         else:
-            self._logger = NullLogger()
+            self._logger = log.NullLogger()
 
         if on_error is not None:
             self._on_error = on_error
@@ -92,7 +94,7 @@ class DuplicateFinder(object):
     def _search_content_in_size_set(self, file_content_iter):
         stats = dict(completed=0, early_out=0, canceled=0)
 
-        pool = StreamPool(self._max_open_files)
+        pool = streampool.StreamPool(self._max_open_files)
 
         initial_set = [
             ContentStreamPair(content, pool.open(content.entry.path))
@@ -231,7 +233,7 @@ class AddressIndexer(object):
         for address, entry in addr_entry_pairs:
             addr_lookup[address].append(entry)
         for address, entries in addr_lookup.items():
-            yield FileContent(address=address, entries=entries)
+            yield fs.FileContent(address=address, entries=entries)
 
 
 class AddressIgnorer(object):
@@ -244,7 +246,7 @@ class AddressIgnorer(object):
     def sets(self):
         for size, entries in self._size_index.items():
             if len(entries) > 1:
-                yield size, [ FileContent(address=None, entry=entry) for entry in entries ]
+                yield size, [ fs.FileContent(address=None, entry=entry) for entry in entries ]
 
 
 ContentStreamPair = collections.namedtuple(
