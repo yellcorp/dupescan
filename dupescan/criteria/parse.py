@@ -61,9 +61,9 @@ class Parser(object):
         while True:
             criteria.append(self._criterion())
 
-            if self._token.is_type(lex.Token.END):
+            if self._token.is_type(lex.Token.Type.end):
                 return criteria
-            elif self._token.is_type(lex.Token.COMMA):
+            elif self._token.is_type(lex.Token.Type.comma):
                 self._consume()
             else:
                 self._error_expected(("','", "end"))

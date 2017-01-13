@@ -1,3 +1,5 @@
+from enum import Enum
+
 from dupescan.criteria._common import ParseError
 
 
@@ -24,12 +26,12 @@ class Lexer(object):
 
             if ch == ",":
                 self.pos += 1
-                return self._token(Token.COMMA, None)
+                return self._token(Token.Type.comma, None)
             elif ch in "'\"":
                 return self._quoted_string()
             else:
                 return self._bare_string()
-        return Token(Token.END, None, "", self.pos)
+        return Token(Token.Type.end, None, "", self.pos)
 
     def _token(self, token_type, value):
         return Token(token_type, value, self.text[self._start : self.pos], self._start)
@@ -45,7 +47,7 @@ class Lexer(object):
                 value.append(self._escape_char())
             else:
                 value.append(ch)
-        return self._token(Token.STRING, "".join(value))
+        return self._token(Token.Type.string, "".join(value))
 
     def _quoted_string(self):
         value = [ ]
@@ -56,7 +58,7 @@ class Lexer(object):
             ch = self.text[self.pos]
             self.pos += 1
             if ch == quote:
-                return self._token(Token.STRING, "".join(value))
+                return self._token(Token.Type.string, "".join(value))
             if ch == "\\":
                 value.append(self._escape_char())
             else:
@@ -90,15 +92,10 @@ class Lexer(object):
 
 
 class Token(object):
-    STRING = 1
-    COMMA = 2
-    END = 3
-
-    _type_names = {
-        STRING: "string",
-        COMMA:  "comma",
-        END:    "end"
-    }
+    class Type(Enum):
+        string = 1
+        comma = 2
+        end = 3
 
     def __init__(self, token_type, value, text, position):
         self.token_type = token_type
@@ -118,14 +115,11 @@ class Token(object):
 
     __str__ = __repr__
 
-    def type_name(self):
-        return self._type_names.get(self.token_type, "<bad type>")
-
     def is_type(self, token_type):
         return self.token_type == token_type
 
     def is_string(self, value=None):
-        return self.token_type == self.STRING and (
+        return self.token_type == Token.Type.string and (
             value is None or
             self.value == value
         )
