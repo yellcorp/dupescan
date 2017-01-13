@@ -1,6 +1,8 @@
 import os
 import re
 
+from dupescan import funcutil
+
 
 class SelectionRules(object):
     def __init__(self, decide_functions):
@@ -61,7 +63,7 @@ def build_operator_graph(graph):
     ):
         positive = BinaryFunction(pos_name, pos_tokens, func, arg_type)
         graph.add(positive.token_sequences, positive)
-        negative = BinaryFunction(neg_name, neg_tokens, compose_not(func), arg_type)
+        negative = BinaryFunction(neg_name, neg_tokens, funcutil.not_of(func), arg_type)
         graph.add(negative.token_sequences, negative)
 
 
@@ -98,7 +100,7 @@ def build_adjective_graph(graph):
     ):
         positive = BinaryFunction(pos_word, [pos_word], func, arg_type)
         graph.add(positive.token_sequences, positive)
-        negative = BinaryFunction(neg_word, [neg_word], compose_negate(func), arg_type)
+        negative = BinaryFunction(neg_word, [neg_word], funcutil.negative_of(func), arg_type)
         graph.add(negative.token_sequences, negative)
 
 
@@ -154,18 +156,6 @@ class CaseInsensitiveContext(CaseSensitiveContext):
 
     def compare(self, a, b):
         return CaseSensitiveContext.compare(self, lower_if_str(a), lower_if_str(b))
-
-
-def compose_not(f):
-    def g(*args):
-        return not f(*args)
-    return g
-
-
-def compose_negate(f):
-    def g(*args):
-        return -f(*args)
-    return g
 
 
 def compare(a, b):

@@ -7,6 +7,7 @@ from dupescan import (
     core,
     criteria,
     fs,
+    funcutil,
     log,
     platform,
     report,
@@ -15,7 +16,7 @@ from dupescan import (
 from dupescan.cli._common import add_common_cli_args
 
 
-__all__ = [ "execute_report", "scan", "run" ]
+__all__ = ("execute_report", "scan", "run")
 
 
 def get_arg_parser():
@@ -123,6 +124,154 @@ def get_arg_parser():
     return p
 
 
+def main():
+    return run(sys.argv[1:])
+
+
+def run(argv=None):
+    p = get_arg_parser()
+    args = p.parse_args(argv)
+
+    if args.help_prefer:
+        with open(
+            os.path.join(
+                os.path.abspath(os.path.dirname(__file__)),
+                "preferhelp"
+            )
+        ) as stream:
+            print(stream.read().format(script_name=os.path.basename(sys.argv[0])))
+        return 0
+
+    if args.execute is None:
+        config = ScanConfig()
+        if args.zero:
+            if args.min_size > 0:
+                print("Conflicting arguments: --zero implies --min-size 0, but --min-size was also specified.")
+                return 1
+            config.min_file_size = 0
+        elif args.min_size != None:
+            config.min_file_size = args.min_size
+
+        if args.dry_run:
+            print("Warning: -n/--dry-run has no effect if -x/--execute is not specified.", file=sys.stderr)
+
+        if len(args.paths) == 0:
+            print("No paths specified")
+            return 1
+
+        config.recurse = args.recurse
+        config.only_mixed_roots = args.only_mixed_roots
+        config.include_symlinks = args.symlinks
+        config.report_hardlinks = args.aliases
+        config.prefer = args.prefer
+        config.verbose = args.verbose
+        config.buffer_size = args.buffer_size
+        config.log_time = args.time
+
+        scan(args.paths, config)
+
+        return 0
+
+    else:
+        if any((
+            args.paths,
+            args.symlinks,
+            args.zero,
+            args.aliases,
+            args.recurse,
+            args.only_mixed_roots,
+            args.min_size,
+            args.prefer,
+            args.buffer_size,
+            args.time
+        )):
+            print("Only -n/--dry-run can be used with -x/--execute. All other options must be omitted.", file=sys.stderr)
+            return 1
+
+        return execute_report(args.execute, args.dry_run)
+
+
+class ScanConfig(object):
+    def __init__(self):
+        self.recurse = False
+        self.only_mixed_roots = False
+        self.min_file_size = 1
+        self.include_symlinks = False
+        self.report_hardlinks = False
+        self.prefer = None
+        self.verbose = False
+        self.buffer_size = 0
+        self.log_time = False
+
+
+def scan(paths, config):
+    entry_iter = create_file_iterator(paths, config.recurse, config.min_file_size, config.include_symlinks)
+    content_indexer = platform.posix_inode if config.report_hardlinks else None # todo: windows hardlink detector
+    reporter = create_reporter(config.prefer, config.report_hardlinks)
+    logger = log.StreamLogger(
+        stream = sys.stderr,
+        min_level=log.DEBUG if config.verbose else log.INFO,
+    )
+
+    find_dupes = core.DuplicateFinder(
+        content_key_func = content_indexer,
+        buffer_size = config.buffer_size,
+        cancel_func = cancel_if_single_root if config.only_mixed_roots else None,
+        logger = logger
+    )
+
+    start_time = time.time() if config.log_time else 0
+
+    for dupe_set in find_dupes(fs.unique_entries(entry_iter)):
+        reporter.handle_dupe_set(dupe_set)
+
+    if config.log_time:
+        reporter.print("# Elapsed time: {}".format(units.format_duration(time.time() - start_time)))
+
+
+def create_file_iterator(paths, recurse=False, min_file_size=1, include_symlinks=False):
+    ifunc = (
+        fs.recurse_iterator if recurse
+        else fs.flat_iterator
+    )
+
+    file_size_filter = None
+    if min_file_size > 0:
+        file_size_filter = lambda e: e.size >= min_file_size
+
+    symlink_filter = None
+    if not include_symlinks:
+        symlink_filter = lambda e: not e.is_symlink
+
+    file_filter = funcutil.and_of(symlink_filter, file_size_filter)
+    dir_filter = symlink_filter
+
+    return ifunc(paths, dir_filter, file_filter)
+
+
+def cancel_if_single_root(dupe_set):
+    roots = set(
+        entry.root_index
+        for content in dupe_set
+        for entry in content.entries
+    )
+
+    return len(roots) <= 1
+
+
+def create_reporter(prefer=None, report_hardlinks=False):
+    selector = None
+    if prefer:
+        try:
+            selector = criteria.parse_selector(prefer)
+        except criteria.ParseError as parse_error:
+            for line in highlight_sample(prefer, 78, parse_error.position, parse_error.length):
+                print(line, file=sys.stderr)
+            raise
+
+    return Reporter(show_hardlink_info=report_hardlinks, selector_func=selector)
+
+
 SELECTION_MARKER_UNIQUE =    ">"
 SELECTION_MARKER_NONUNIQUE = "?"
 class Reporter(object):
@@ -180,37 +329,6 @@ class Reporter(object):
         self.print()
 
 
-def and_funcs(f, g):
-    if f is None:
-        return g
-    if g is None:
-        return f
-
-    def h(a):
-        return f(a) and g(a)
-    return h
-
-
-def create_walker(paths, recurse=False, min_file_size=1, include_symlinks=False):
-    ifunc = (
-        fs.recurse_iterator if recurse
-        else fs.flat_iterator
-    )
-
-    file_size_filter = None
-    if min_file_size > 0:
-        file_size_filter = lambda e: e.size >= min_file_size
-
-    symlink_filter = None
-    if not include_symlinks:
-        symlink_filter = lambda e: not e.is_symlink
-
-    file_filter = and_funcs(symlink_filter, file_size_filter)
-    dir_filter = symlink_filter
-
-    return ifunc(paths, dir_filter, file_filter)
-
-
 def highlight_sample(sample, line_width, hl_pos, hl_length):
     if hl_pos is None:
         return
@@ -244,19 +362,6 @@ def highlight_sample(sample, line_width, hl_pos, hl_length):
     yield highlight
 
 
-def create_reporter(prefer=None, report_hardlinks=False):
-    selector = None
-    if prefer:
-        try:
-            selector = criteria.parse_selector(prefer)
-        except criteria.ParseError as parse_error:
-            for line in highlight_sample(prefer, 78, parse_error.position, parse_error.length):
-                print(line, file=sys.stderr)
-            raise
-
-    return Reporter(show_hardlink_info=report_hardlinks, selector_func=selector)
-
-
 def execute_report(report_path, dry_run):
     errors = False
     with open(report_path, "r") as report_stream:
@@ -272,118 +377,3 @@ def execute_report(report_path, dry_run):
                             errors = True
                     print()
     return 2 if errors else 0
-
-
-def cancel_if_single_root(dupe_set):
-    roots = set(
-        entry.root_index
-        for content in dupe_set
-        for entry in content.entries
-    )
-
-    return len(roots) <= 1
-
-
-def scan(
-    paths,
-    recurse = False,
-    only_mixed_roots = False,
-    min_file_size = 1,
-    include_symlinks = False,
-    report_hardlinks = False,
-    prefer = None,
-    verbose = False,
-    buffer_size = 0,
-    log_time = False
-):
-    entry_iter = create_walker(paths, recurse, min_file_size, include_symlinks)
-    content_indexer = platform.posix_inode if include_symlinks else None # todo: windows hardlink detector
-    reporter = create_reporter(prefer, report_hardlinks)
-    logger = log.StreamLogger(
-        stream = sys.stderr,
-        min_level=log.DEBUG if verbose else log.INFO,
-    )
-
-    find_dupes = core.DuplicateFinder(
-        content_key_func = content_indexer,
-        buffer_size = buffer_size,
-        cancel_func = cancel_if_single_root if only_mixed_roots else None,
-        logger = logger
-    )
-
-    start_time = time.time() if log_time else 0
-
-    for dupe_set in find_dupes(fs.unique_entries(entry_iter)):
-        reporter.handle_dupe_set(dupe_set)
-
-    if log_time:
-        reporter.print("# Elapsed time: {}".format(units.format_duration(time.time() - start_time)))
-
-
-def run(argv=None):
-    p = get_arg_parser()
-    args = p.parse_args(argv)
-
-    if args.help_prefer:
-        with open(
-            os.path.join(
-                os.path.abspath(os.path.dirname(__file__)),
-                "preferhelp"
-            )
-        ) as stream:
-            print(stream.read().format(script_name=os.path.basename(sys.argv[0])))
-        return 0
-
-    if args.execute is None:
-        min_file_size = 1
-        if args.zero:
-            if args.min_size > 0:
-                print("Conflicting arguments: --zero implies --min-size 0, but --min-size was also specified.")
-                return 1
-            min_file_size = 0
-        elif args.min_size != None:
-            min_file_size = args.min_size
-
-        if args.dry_run:
-            print("Warning: -n/--dry-run has no effect if -x/--execute is not specified.", file=sys.stderr)
-
-        if len(args.paths) == 0:
-            print("No paths specified")
-            return 1
-
-        scan(
-            paths = args.paths,
-            recurse = args.recurse,
-            only_mixed_roots = args.only_mixed_roots,
-            min_file_size = min_file_size,
-            include_symlinks = args.symlinks,
-            report_hardlinks = args.aliases,
-            prefer = args.prefer,
-            verbose = args.verbose,
-            buffer_size = args.buffer_size,
-            log_time = args.time
-        )
-
-        return 0
-
-    else:
-        if any((
-            args.paths,
-            args.symlinks,
-            args.zero,
-            args.aliases,
-            args.recurse,
-            args.only_mixed_roots,
-            args.min_size,
-            args.prefer,
-            args.buffer_size,
-            args.time
-        )):
-            print("Only -n/--dry-run can be used with -x/--execute. All other options must be omitted.", file=sys.stderr)
-            return 1
-
-        return execute_report(args.execute, args.dry_run)
-
-
-def main():
-    return run(sys.argv[1:])
