@@ -1,3 +1,12 @@
+__all__ = (
+    "DEFAULT_BUFFER_SIZE",
+    "decide_max_open_files",
+    "posix_inode",
+)
+
+
+DEFAULT_BUFFER_SIZE = 4096
+
 ABSOLUTE_MAX_OPEN_FILES = 32768
 FALLBACK_MAX_OPEN_FILES = 64
 def decide_max_open_files():
@@ -21,3 +30,12 @@ def decide_max_open_files():
         pass
 
     return FALLBACK_MAX_OPEN_FILES
+
+
+def posix_inode(entry):
+    entry_stat = entry.stat
+    return (entry_stat.st_dev, entry_stat.st_ino)
+
+
+# TODO
+# def windows_content_id():

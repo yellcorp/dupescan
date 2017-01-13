@@ -3,12 +3,11 @@ import operator
 
 from dupescan.fs import FileContent
 from dupescan.log import NullLogger
-from dupescan.platform import decide_max_open_files
+from dupescan.platform import decide_max_open_files, DEFAULT_BUFFER_SIZE
 from dupescan.streampool import StreamPool
 
 
 __all__ = (
-    "DEFAULT_BUFFER_SIZE",
     "DuplicateFinder",
     "DuplicateContentSet",
 )
@@ -18,7 +17,6 @@ def noop(*args, **kwargs):
     pass
 
 
-DEFAULT_BUFFER_SIZE = 4096
 class DuplicateFinder(object):
     def __init__(
         self,

@@ -8,6 +8,7 @@ from dupescan import (
     criteria,
     fs,
     log,
+    platform,
     report,
     units,
 )
@@ -296,7 +297,7 @@ def scan(
     log_time = False
 ):
     entry_iter = create_walker(paths, recurse, min_file_size, include_symlinks)
-    content_indexer = fs.posix_inode if include_symlinks else None # todo: windows hardlink detector
+    content_indexer = platform.posix_inode if include_symlinks else None # todo: windows hardlink detector
     reporter = create_reporter(prefer, report_hardlinks)
     logger = log.StreamLogger(
         stream = sys.stderr,

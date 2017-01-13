@@ -1,6 +1,6 @@
 from dupescan import (
     __version__,
-    core,
+    platform,
     units,
 )
 
@@ -8,7 +8,7 @@ from dupescan import (
 def add_common_cli_args(arg_parser):
     arg_parser.add_argument("--buffer-size",
         type=units.parse_byte_count,
-        default=core.DEFAULT_BUFFER_SIZE,
+        default=platform.DEFAULT_BUFFER_SIZE,
         metavar="SIZE",
         help="""Specifies the size of each buffer used when comparing files by
                 content. This option accepts a byte count.  The default is

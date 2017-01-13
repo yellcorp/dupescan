@@ -191,15 +191,6 @@ class FileContent(object):
         return None
 
 
-def posix_inode(entry):
-    entry_stat = entry.stat
-    return (entry_stat.st_dev, entry_stat.st_ino)
-
-
-# TODO
-# def windows_address_getter():
-
-
 def flat_iterator(paths, dir_entry_filter=None, file_entry_filter=None):
     if dir_entry_filter is None:
         dir_entry_filter = lambda _: True
