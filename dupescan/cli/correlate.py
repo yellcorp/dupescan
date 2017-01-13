@@ -86,13 +86,108 @@ class Action(Enum):
     removed = 4
 
 
-def tap_iterator(member_function, input_iterator):
-    for member in input_iterator:
-        member_function(member)
-        yield member
+ACTION_STRINGS = {
+    Action.match:   ("matches", "=", "Matches", None),
+    Action.added:   ("adds",    "+", "Adds",    "32"),
+    Action.removed: ("removes", "-", "Removes", "31")
+}
+ARG_NAME = 0
+SYMBOL = 1
+SUMMARY_WORD = 2
+DEFAULT_SGR = 3
 
 
-def correlate(root1, root2, verbose=False, buffer_size=None):
+def main():
+    return run(sys.argv[1:])
+
+
+def run(argv=None):
+    p = get_arg_parser()
+    args = p.parse_args(argv)
+
+    config = CorrelateConfig()
+    config.include_actions = set(
+        action
+        for action, strings in ACTION_STRINGS.items()
+        if getattr(args, strings[ARG_NAME])
+    )
+    if len(config.include_actions) == 0:
+        config.include_actions = set(Action)
+
+    config.ansi = args.colorize
+    config.summary = not args.no_summary
+    config.verbose = args.verbose
+    config.file = sys.stdout
+    config.buffer_size = args.buffer_size,
+
+    generate_report(*args.dirs, config)
+
+    return 0
+
+
+class CorrelateConfig(object):
+    def __init__(self):
+        self.include_actions = None
+
+        # None: autodetect, True: use default, False: no colors, or tuple of 3 things to appear between \x1b[ and m
+        self.ansi = None
+
+        self.summary = True
+        self.verbose = False
+        self.file = sys.stdout
+        self.buffer_size = None
+
+
+def generate_report(root1, root2, config):
+    if config.include_actions is None or len(config.include_actions) == 0:
+        include_actions = set(Action)
+    else:
+        include_actions = set(config.include_actions)
+
+    file = config.file if config.file is not None else sys.stdout
+    out = functools.partial(print, file=file)
+
+    sgr_lookup = interpret_ansi_param(config.ansi, file)
+
+    action_count = collections.Counter()
+
+    logger = log.StreamLogger(
+        stream = sys.stderr,
+        min_level=log.DEBUG if config.verbose else log.INFO,
+    )
+
+    dupe_finder = core.DuplicateFinder(
+        buffer_size = config.buffer_size,
+        logger = logger,
+    )
+
+    for action, entry1, entry2 in correlate(dupe_finder, root1, root2):
+        action_count[action] += 1
+
+        if action not in include_actions:
+            continue
+
+        symbol = ACTION_STRINGS[action][SYMBOL]
+        for entry in (entry1, entry2):
+            if entry is None:
+                continue
+            out(format_ansi_sgr(
+                "%s %s" % (symbol, report.format_path(entry.path)),
+                sgr_lookup[action]
+            ))
+            symbol = " "
+
+        out("")
+
+    if config.summary:
+        counts = (
+            "%s: %s" % (ACTION_STRINGS[action][SUMMARY_WORD], action_count[action])
+            for action in Action
+        )
+        out("# " + ", ".join(counts))
+
+
+def correlate(dupe_finder, root1, root2):
     all_entries = set()
     ignore_symlinks = lambda e: not e.is_symlink
 
@@ -105,17 +200,7 @@ def correlate(root1, root2, verbose=False, buffer_size=None):
         )
     )
 
-    logger = log.StreamLogger(
-        stream = sys.stderr,
-        min_level=log.DEBUG if verbose else log.INFO,
-    )
-
-    find_dupes = core.DuplicateFinder(
-        # buffer_size = buffer_size,
-        logger = logger
-    )
-
-    for dupe_set in find_dupes(entry_iter):
+    for dupe_set in dupe_finder(entry_iter):
         partitions = ([ ], [ ])
         for content in dupe_set:
             partitions[content.entry.root_index].append(content.entry)
@@ -141,15 +226,10 @@ def correlate(root1, root2, verbose=False, buffer_size=None):
             yield Action.added, None, entry
 
 
-ACTION_STRINGS = {
-    Action.match:   ("matches", "=", "Matches", None),
-    Action.added:   ("adds",    "+", "Adds",    "32"),
-    Action.removed: ("removes", "-", "Removes", "31")
-}
-ARG_NAME = 0
-SYMBOL = 1
-SUMMARY_WORD = 2
-DEFAULT_SGR = 3
+def tap_iterator(member_function, input_iterator):
+    for member in input_iterator:
+        member_function(member)
+        yield member
 
 
 def format_ansi_sgr(string, sgr):
@@ -178,83 +258,3 @@ def interpret_ansi_param(ansi, out_stream):
         }
 
     return dict(zip(Action, ansi))
-
-
-def generate_report(
-    root1, root2,
-    include_actions=None,
-    ansi=None, # None: autodetect, True: use default, False: no colors, or tuple of 3 things to appear between \x1b[ and m
-    summary=True,
-    verbose=False,
-    file=None,
-    buffer_size=None,
-):
-    if include_actions is None or len(include_actions) == 0:
-        include_actions = set(Action)
-    else:
-        include_actions = set(include_actions)
-
-    if file is None:
-        file = sys.stdout
-    out = functools.partial(print, file=file)
-
-    sgr_lookup = interpret_ansi_param(ansi, file)
-
-    action_count = collections.Counter()
-
-    # TODO: ugh this is messy, combine the two functions,
-    # or make a config class/namedtuple, or both
-    for action, entry1, entry2 in correlate(root1, root2, verbose=verbose, buffer_size=buffer_size):
-        action_count[action] += 1
-
-        if action not in include_actions:
-            continue
-
-        symbol = ACTION_STRINGS[action][SYMBOL]
-        for entry in (entry1, entry2):
-            if entry is None:
-                continue
-            out(format_ansi_sgr(
-                "%s %s" % (symbol, report.format_path(entry.path)),
-                sgr_lookup[action]
-            ))
-            symbol = " "
-
-        out("")
-
-    if summary:
-        counts = (
-            "%s: %s" % (ACTION_STRINGS[action][SUMMARY_WORD], action_count[action])
-            for action in Action
-        )
-        out("# " + ", ".join(counts))
-
-
-def run(argv=None):
-    p = get_arg_parser()
-    args = p.parse_args(argv)
-
-    include_actions = set(
-        action
-        for action, strings in ACTION_STRINGS.items()
-        if getattr(args, strings[ARG_NAME])
-    )
-
-    if len(include_actions) == 0:
-        include_actions = set(Action)
-
-    generate_report(
-        *args.dirs,
-        include_actions=include_actions,
-        ansi=args.colorize,
-        summary=not args.no_summary,
-        verbose=args.verbose,
-        file=sys.stdout,
-        buffer_size=args.buffer_size,
-    )
-
-    return 0
-
-
-def main():
-    return run(sys.argv[1:])
