@@ -77,26 +77,3 @@ class StreamPool(object):
 
     def _notify_did_close(self, stream):
         del self._open_instances[stream._inst_id]
-
-
-def decide_max_open_files():
-    try:
-        import resource
-
-        rid = None
-        if hasattr(resource, "RLIMIT_NOFILE"):
-            rid = resource.RLIMIT_NOFILE
-        elif hasattr(resource, "RLIMIT_OFILE"):
-            rid = resource.RLIMIT_OFILE
-
-        if rid is not None:
-            soft_limit, _ = resource.getrlimit(rid)
-            if soft_limit == resource.RLIM_INFINITY:
-                return 32768
-
-            return max(1, int(soft_limit * 0.75))
-
-    except ImportError:
-        pass
-
-    return 64

@@ -5,13 +5,13 @@ import time
 
 from dupescan import (
     algo,
-    cli,
     criteria,
     fs,
     log,
     report,
     units,
 )
+from dupescan.cli._common import add_common_cli_args
 
 
 __all__ = [ "execute_report", "scan", "run" ]
@@ -117,7 +117,7 @@ def get_arg_parser():
                 --execute would perform without actually doing them."""
     )
 
-    cli.add_common_cli_args(p)
+    add_common_cli_args(p)
 
     return p
 

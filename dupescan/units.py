@@ -1,28 +1,25 @@
 import re
+import functools
 
 
-def once(func):
-    called = False
-    value = None
-    def f():
-        nonlocal called, value
-        if not called:
-            called = True
-            value = func()
-        return value
-    return f
+__all__ = (
+    "ParseError",
+    "format_byte_count",
+    "parse_byte_count",
+    "format_duration",
+)
 
 
 class ParseError(ValueError):
     pass
 
 
-_FORMAT_BYTE_SUFFIXES = (" bytes", "K", "M", "G", "T")
+FORMAT_BYTE_SUFFIXES = (" bytes", "K", "M", "G", "T")
 def format_byte_count(byte_count, float_precision=1):
     # shut pylint up: given that the iterated var never changes, the loop
     # always iterates through at least one entry
     #pylint: disable=undefined-loop-variable
-    for suffix in _FORMAT_BYTE_SUFFIXES:
+    for suffix in FORMAT_BYTE_SUFFIXES:
         if byte_count < 1024:
             break
         byte_count /= 1024
@@ -35,14 +32,13 @@ def format_byte_count(byte_count, float_precision=1):
     )
 
 
-_PARSE_BYTE_SUFFIXES = {
+PARSE_BYTE_SUFFIXES = {
     "b": 1,
     "k": 1024,
     "m": 1024**2,
     "g": 1024**3
 }
-
-@once
+@functools.lru_cache()
 def get_parse_byte_regex():
     return re.compile(
         r"""^
@@ -52,7 +48,7 @@ def get_parse_byte_regex():
         )
         \s*
         (?P<suffix> [{suffixes}]? )
-        $""".format(suffixes="|".join(_PARSE_BYTE_SUFFIXES.keys())),
+        $""".format(suffixes="|".join(PARSE_BYTE_SUFFIXES.keys())),
         re.IGNORECASE | re.VERBOSE
     )
 
@@ -68,7 +64,7 @@ def parse_byte_count(string):
         value = int(match.group("dec"), 10)
 
     if match.group("suffix"):
-        value *= _PARSE_BYTE_SUFFIXES[match.group("suffix").lower()]
+        value *= PARSE_BYTE_SUFFIXES[match.group("suffix").lower()]
 
     return value
 

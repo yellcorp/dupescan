@@ -41,8 +41,8 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "correlate = dupescan.correlate:main",
-            "finddupes = dupescan.finddupes:main"
+            "correlate = dupescan.cli.correlate:main",
+            "finddupes = dupescan.cli.finddupes:main"
         ]
     },
     # test_suite="tests"

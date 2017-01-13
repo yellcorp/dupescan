@@ -7,11 +7,11 @@ import sys
 
 from dupescan import (
     algo,
-    cli,
     fs,
     log,
     report,
 )
+from dupescan.cli._common import add_common_cli_args
 
 
 __all__ = ("correlate", "generate_report", "run")
@@ -75,7 +75,7 @@ def get_arg_parser():
         help="""Suppress the summary."""
     )
 
-    cli.add_common_cli_args(p)
+    add_common_cli_args(p)
 
     return p
 

@@ -3,10 +3,8 @@ import operator
 
 from dupescan.fs import FileContent
 from dupescan.log import NullLogger
-from dupescan.resources import (
-    StreamPool,
-    decide_max_open_files,
-)
+from dupescan.platform import decide_max_open_files
+from dupescan.streampool import StreamPool
 
 
 __all__ = (
