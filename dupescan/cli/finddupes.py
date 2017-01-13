@@ -291,33 +291,31 @@ class Reporter(object):
             excess_size=units.format_byte_count(dupe_set.total_size - dupe_set.content_size)
         ))
 
-        selected_entries = set()
         selected_contents = set()
         if self.selector_func is not None:
             try:
-                selected_entries.update(self.selector_func.pick(dupe_set.all_entries()))
-                for instance in dupe_set:
-                    if len(selected_entries.intersection(instance.entries)) > 0:
-                        selected_contents.add(instance)
+                selected_entries = self.selector_func.pick(dupe_set.all_entries())
             except EnvironmentError as ee:
                 self.print("## Skipping selection due to error: {!s}".format(ee))
+            else:
+                selected_contents.update(select_content_by_entries(dupe_set, selected_entries))
 
         keep_marker = (
             SELECTION_MARKER_UNIQUE if len(selected_contents) == 1
             else SELECTION_MARKER_NONUNIQUE
         )
 
-        content_header = self.show_hardlink_info
+        show_hardlink_header = self.show_hardlink_info
         for index, content in enumerate(
             sorted(
                 dupe_set,
                 key=lambda c: len(c.entries), reverse=True
             )
         ):
-            if content_header:
+            if show_hardlink_header:
                 if len(content.entries) == 1:
                     self.print("# Separate instances follow")
-                    content_header = False
+                    show_hardlink_header = False
                 else:
                     self.print("# Instance {}".format(index + 1))
 
@@ -327,6 +325,19 @@ class Reporter(object):
                     path=report.format_path(entry.path)
                 ))
         self.print()
+
+
+def select_content_by_entries(contents, selected_entries):
+    selected_paths = frozenset(e.path for e in selected_entries)
+    selected_contents = set()
+
+    for content in contents:
+        if (
+            content not in selected_contents and
+            any(entry.path in selected_paths for entry in content.entries)
+        ):
+            selected_contents.add(content)
+            yield content
 
 
 def highlight_sample(sample, line_width, hl_pos, hl_length):
