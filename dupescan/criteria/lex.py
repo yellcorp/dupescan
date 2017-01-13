@@ -132,7 +132,7 @@ class Token(object):
 
 
 ESCAPES = {
-    "0": chr(0),
+    "0": "\0",
     "b": "\b",
     "f": "\f",
     "n": "\n",
