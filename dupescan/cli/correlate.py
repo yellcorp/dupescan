@@ -6,7 +6,7 @@ import itertools
 import sys
 
 from dupescan import (
-    algo,
+    core,
     fs,
     log,
     report,
@@ -110,7 +110,7 @@ def correlate(root1, root2, verbose=False, buffer_size=None):
         min_level=log.DEBUG if verbose else log.INFO,
     )
 
-    find_dupes = algo.DuplicateFinder(
+    find_dupes = core.DuplicateFinder(
         # buffer_size = buffer_size,
         logger = logger
     )

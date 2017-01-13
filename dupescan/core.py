@@ -189,6 +189,30 @@ class DuplicateFinder(object):
         )
 
 
+class DuplicateContentSet(tuple):
+    def all_entries(self):
+        for content in self:
+            for entry in content.entries:
+                yield entry
+
+    @property
+    def content_size(self):
+        for entry in self.all_entries():
+            return entry.size
+
+    @property
+    def total_size(self):
+        return self.content_size * len(self)
+
+    @property
+    def entry_count(self):
+        return sum(len(content.entries) for content in self)
+
+    @classmethod
+    def _from_cs_set(cls, cs_iter):
+        return cls(cs.content for cs in cs_iter)
+
+
 class AddressIndexer(object):
     def __init__(self, content_key_func):
         self._content_key_func = content_key_func
@@ -223,30 +247,6 @@ class AddressIgnorer(object):
         for size, entries in self._size_index.items():
             if len(entries) > 1:
                 yield size, [ FileContent(address=None, entry=entry) for entry in entries ]
-
-
-class DuplicateContentSet(tuple):
-    def all_entries(self):
-        for content in self:
-            for entry in content.entries:
-                yield entry
-
-    @property
-    def content_size(self):
-        for entry in self.all_entries():
-            return entry.size
-
-    @property
-    def total_size(self):
-        return self.content_size * len(self)
-
-    @property
-    def entry_count(self):
-        return sum(len(content.entries) for content in self)
-
-    @classmethod
-    def _from_cs_set(cls, cs_iter):
-        return cls(cs.content for cs in cs_iter)
 
 
 ContentStreamPair = collections.namedtuple(

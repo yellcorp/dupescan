@@ -4,7 +4,7 @@ import sys
 import time
 
 from dupescan import (
-    algo,
+    core,
     criteria,
     fs,
     log,
@@ -303,7 +303,7 @@ def scan(
         min_level=log.DEBUG if verbose else log.INFO,
     )
 
-    find_dupes = algo.DuplicateFinder(
+    find_dupes = core.DuplicateFinder(
         content_key_func = content_indexer,
         buffer_size = buffer_size,
         cancel_func = cancel_if_single_root if only_mixed_roots else None,
