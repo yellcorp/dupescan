@@ -203,7 +203,6 @@ def run(argv=None):
             args.only_mixed_roots,
             args.min_size,
             args.prefer,
-            args.buffer_size,
             args.time,
             args.progress,
         )):
