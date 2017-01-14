@@ -107,6 +107,11 @@ def get_arg_parser():
         help="""Log detailed information to STDERR."""
     )
 
+    p.add_argument("--progress",
+        action="store_true",
+        help="""Show progress bars on STDERR."""
+    )
+
     p.add_argument("-x", "--execute",
         metavar="PATH",
         help="""Delete unmarked files in the report at %(metavar)s. Sets where
@@ -180,6 +185,7 @@ def run(argv=None):
         config.report_hardlinks = args.aliases
         config.prefer = args.prefer
         config.verbose = args.verbose
+        config.progress = args.progress
         config.buffer_size = args.buffer_size
         config.log_time = args.time
 
@@ -198,7 +204,8 @@ def run(argv=None):
             args.min_size,
             args.prefer,
             args.buffer_size,
-            args.time
+            args.time,
+            args.progress,
         )):
             print("Only -n/--dry-run can be used with -x/--execute. All other options must be omitted.", file=sys.stderr)
             return 1
@@ -230,6 +237,8 @@ class ScanConfig(object):
 
         verbose (bool): If True, print debugging info to stderr.
 
+        progress (bool): If True, print progress bars to stderr.
+
         buffer_size (int): Number of bytes to read at a time when comparing
             files by content.  If 0, the default of
             platform.DEFAULT_BUFFER_SIZE is used.
@@ -245,6 +254,7 @@ class ScanConfig(object):
         self.report_hardlinks = False
         self.prefer = None
         self.verbose = False
+        self.progress = False
         self.buffer_size = 0
         self.log_time = False
 
@@ -274,7 +284,8 @@ def scan(paths, config=None):
         content_key_func = content_indexer,
         buffer_size = config.buffer_size,
         cancel_func = cancel_if_single_root if config.only_mixed_roots else None,
-        logger = logger
+        logger = logger,
+        progress_handler = ProgressHandler(stream=sys.stderr) if config.progress else None,
     )
 
     start_time = time.time() if config.log_time else 0
@@ -314,6 +325,46 @@ def cancel_if_single_root(dupe_set):
     )
 
     return len(roots) <= 1
+
+
+class ProgressHandler(object):
+    def __init__(self, stream=None, line_width=78):
+        self._line_width = line_width
+        self._stream = stream if stream is not None else sys.stderr
+        self._last_len = 0
+
+    def progress(self, sets, file_pos, file_size):
+        set_vis = "[%s]" % "|".join(str(len(s)) for s in sets)
+        read_size = units.format_byte_count(file_size, 0)
+        progress_room = self._line_width - (len(set_vis) + len(read_size)) - 2
+
+        if progress_room >= 2:
+            progress_chars = int(progress_room * file_pos / file_size + 0.5)
+            bar = "".join((
+                "*" * progress_chars,
+                "-" * (progress_room - progress_chars),
+            ))
+            line = " ".join((set_vis, bar, read_size))
+        else:
+            line = " ".join((set_vis, read_size))
+
+        self.set_text(line)
+
+    def clear(self):
+        self.set_text("")
+        self.set_text("")
+
+    def set_text(self, text):
+        effective_text, _, _ = text.partition("\n")
+        effective_text = effective_text.replace("\t", "    ")
+        effective_text = text[:self._line_width]
+
+        this_len = len(effective_text)
+        self._stream.write("\r%s" % effective_text)
+        if this_len < self._last_len:
+            self._stream.write(" " * (self._last_len - this_len))
+        self._stream.flush()
+        self._last_len = this_len
 
 
 def create_reporter(prefer=None, report_hardlinks=False):

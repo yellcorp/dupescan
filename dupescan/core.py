@@ -19,6 +19,7 @@ def noop(*args, **kwargs):
     pass
 
 
+PROGRESS_CALLBACK_FREQUENCY = 0x100000
 class DuplicateFinder(object):
     """Main class for detecting files with duplicate content in a set.
 
@@ -34,7 +35,8 @@ class DuplicateFinder(object):
         buffer_size = None,
         cancel_func = None,
         logger = None,
-        on_error = None,
+        progress_handler = None,
+        on_error = None, # TODO: name this consistently
     ):
         """Construct a new DuplicateFinder.
 
@@ -72,8 +74,19 @@ class DuplicateFinder(object):
 
             logger (log.Logger or None): A logger object used to print debug
                 information.
+            
+            progress_handler (ProgressHandler or None): A ProgressHandler for
+                reporting progress. A ProgressHandler is an object that has two
+                methods: `progress(sets, bytes_read, bytes_total)` and
+                `clear()`. `progress` will be called periodically during file
+                reads. `sets` will be a list of DuplicateContentSet objects,
+                reflecting the current state of the compare operation.
+                `bytes_read` is the number of bytes read from a single
+                representative file, and `bytes_total` is the file size.
+                `clear` will be called immediately before any event that may
+                cause other output to be printed.
 
-            on_error = (func or None): A function accepting 2 arguments:
+            on_error (func or None): A function accepting 2 arguments:
                 `error` and `path`, called whenever an error is encountered.
                 `error` is an instance of EnvironmentError or one of its
                 subclasses. `path` is the path involved. To propagate the
@@ -100,6 +113,11 @@ class DuplicateFinder(object):
             self._logger = logger
         else:
             self._logger = log.NullLogger()
+
+        if progress_handler is not None:
+            self._progress_handler = progress_handler
+        else:
+            self._progress_handler = NullProgressHandler()
 
         if on_error is not None:
             self._on_error = on_error
@@ -154,7 +172,8 @@ class DuplicateFinder(object):
         return list(indexer.sets())
 
     def _search_content_in_size_set(self, file_content_iter):
-        stats = dict(completed=0, early_out=0, canceled=0)
+        stats = dict(bytes_read=0, completed=0, early_out=0, canceled=0)
+        last_progress = 0
 
         pool = streampool.StreamPool(self._max_open_files)
 
@@ -162,8 +181,10 @@ class DuplicateFinder(object):
             ContentStreamPair(content, pool.open(content.entry.path))
             for content in file_content_iter
         ]
+        file_size = initial_set[0].content.entry.size
 
         current_sets = [ initial_set ]
+        self._do_progress_callback(current_sets, 0, file_size)
 
         while len(current_sets) > 0:
             compare_set = current_sets.pop()
@@ -179,9 +200,13 @@ class DuplicateFinder(object):
             buffers = [ ]
             next_sets = [ ]
 
-            if compare_set[0].content.entry.size == 0:
+            if file_size == 0:
                 # files are zero length, so we know every one is going to result in a read
                 # of b"". skip it
+
+                # we could early-out earlier than this, but doing it here guarantees that
+                # the callbacks (i.e. cancel_func, on_progress) behave consistently.
+                # at least until i tidy it up further
                 buffers.append(b"")
                 next_sets.append(compare_set)
 
@@ -199,6 +224,8 @@ class DuplicateFinder(object):
                     stream = cs_pair.stream
                     try:
                         buffer = stream.read(self._buffer_size)
+                        stats["bytes_read"] += len(buffer)
+
                     except EnvironmentError as read_error:
                         self._log_error(read_error, stream.content.entry.path)
                         self._on_error(read_error, stream.content.entry.path)
@@ -208,6 +235,10 @@ class DuplicateFinder(object):
                             self._log_error(close_error, stream.content.entry.path)
                             self._on_error(close_error, stream.content.entry.path)
                         continue
+
+                    if stats["bytes_read"] - last_progress > PROGRESS_CALLBACK_FREQUENCY:
+                        last_progress = stats["bytes_read"]
+                        self._do_progress_callback([ compare_set ] + current_sets, stream.tell(), file_size)
 
                     try:
                         next_set = next_sets[buffers.index(buffer)]
@@ -236,6 +267,7 @@ class DuplicateFinder(object):
                 )
 
                 if of_interest:
+                    self._progress_handler.clear()
                     yield DuplicateContentSet._from_cs_set(compare_set)
 
                 if close_set:
@@ -245,9 +277,22 @@ class DuplicateFinder(object):
                 else:
                     current_sets.append(compare_set)
 
+        self._do_progress_callback(current_sets, file_size, file_size)
+        self._progress_handler.clear()
+
         self._logger.debug(
-            "Content comparison end: completed={completed} early_out={early_out} canceled={canceled}",
+            "Content comparison end: bytes_read={bytes_read} completed={completed} early_out={early_out} canceled={canceled}",
             **stats,
+        )
+
+    def _do_progress_callback(self, cs_sets, file_pos, file_size):
+        self._progress_handler.progress(
+            [
+                DuplicateContentSet._from_cs_set(cs)
+                for cs in cs_sets
+            ],
+            file_pos,
+            file_size,
         )
 
 
@@ -288,6 +333,14 @@ class DuplicateContentSet(tuple):
     @classmethod
     def _from_cs_set(cls, cs_iter):
         return cls(cs.content for cs in cs_iter)
+
+
+class NullProgressHandler(object):
+    def progress(self, _sets, _file_pos, _file_size):
+        pass
+
+    def clear(self):
+        pass
 
 
 class AddressIndexer(object):
