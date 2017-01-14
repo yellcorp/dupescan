@@ -326,6 +326,7 @@ def cancel_if_single_root(dupe_set):
     return len(roots) <= 1
 
 
+VISUAL_SET_COUNT = "\u2800\u2840\u28C0\u28C4\u28E4\u28E6\u28F6\u28F7\u28FF"
 class ProgressHandler(object):
     def __init__(self, stream=None, line_width=78):
         self._line_width = line_width
@@ -333,15 +334,23 @@ class ProgressHandler(object):
         self._last_len = 0
 
     def progress(self, sets, file_pos, file_size):
-        set_vis = "[%s]" % "|".join(str(len(s)) for s in sets)
+        set_vis_list = [ ]
+        for s in sets:
+            set_len = len(s)
+            if set_len >= len(VISUAL_SET_COUNT):
+                set_vis_list.append(str(set_len))
+            else:
+                set_vis_list.append(VISUAL_SET_COUNT[set_len])
+
+        set_vis = "[%s]" % "|".join(set_vis_list)
         read_size = units.format_byte_count(file_size, 0)
         progress_room = self._line_width - (len(set_vis) + len(read_size)) - 2
 
         if progress_room >= 2:
             progress_chars = int(progress_room * file_pos / file_size + 0.5)
             bar = "".join((
-                "*" * progress_chars,
-                "-" * (progress_room - progress_chars),
+                "\u2588" * progress_chars,
+                "\u2591" * (progress_room - progress_chars),
             ))
             line = " ".join((set_vis, bar, read_size))
         else:
