@@ -25,7 +25,11 @@ setup(
     license          = "MIT",
     url              = "https://github.com/yellcorp/dupescan",
 
-    packages=[ "dupescan" ],
+    packages=[
+        "dupescan",
+        "dupescan.cli",
+        "dupescan.criteria",
+    ],
     classifiers=[
         'Environment :: Console',
         'Intended Audience :: Developers',
