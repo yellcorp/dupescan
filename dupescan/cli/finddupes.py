@@ -125,10 +125,25 @@ def get_arg_parser():
 
 
 def main():
+    """Entry point for finddupes command.
+    
+    Returns:
+        Exit code for passing to sys.exit()
+    """
     return run(sys.argv[1:])
 
 
 def run(argv=None):
+    """Run finddupes with the specified command line arguments.
+    
+    Args:
+        argv (list of str or None): command line arguments, not including the
+            command itself (argv[0]).
+    
+    Returns:
+        Exit code for passing to sys.exit()
+    """
+
     p = get_arg_parser()
     args = p.parse_args(argv)
 
@@ -192,6 +207,36 @@ def run(argv=None):
 
 
 class ScanConfig(object):
+    """Configuration object affecting behavior of the scan() function.
+
+    Attributes:
+        recurse (bool): If True, recurse into directories and add all
+            descendant files to the set to consider for duplicate detection.
+
+        only_mixed_roots (bool): Only compare files if they were discovered
+            by recursing into different root-level directories.
+
+        min_file_size (int): Only consider files whose size in bytes is greater
+            or equal to this number.
+
+        include_symlinks (bool): If True, resolve symlinks, otherwise ignore
+            them.
+
+        report_hardlinks (bool): If True, go to the effort of detecting
+            hardlinks, and call them out in the generated report.
+
+        prefer (str or None): A 'prefer' string expressing how to choose at least
+            one file from a set to be marked in the generated report.
+
+        verbose (bool): If True, print debugging info to stderr.
+
+        buffer_size (int): Number of bytes to read at a time when comparing
+            files by content.  If 0, the default of
+            platform.DEFAULT_BUFFER_SIZE is used.
+
+        log_time (bool): If True, record the amount of time taken and append it
+            to the report.
+    """
     def __init__(self):
         self.recurse = False
         self.only_mixed_roots = False
@@ -204,13 +249,25 @@ class ScanConfig(object):
         self.log_time = False
 
 
-def scan(paths, config):
+def scan(paths, config=None):
+    """Run a duplicate scan and generate a report.
+
+    Args:
+        paths (iterable of str): The set of files and/or top-level directories
+            to search for duplicates.
+
+        config (ScanConfig): A ScanConfig instance that configures various
+            aspects of the operation.
+    """
+    if config is None:
+        config = ScanConfig()
+
     entry_iter = create_file_iterator(paths, config.recurse, config.min_file_size, config.include_symlinks)
     content_indexer = platform.posix_inode if config.report_hardlinks else None # todo: windows hardlink detector
     reporter = create_reporter(config.prefer, config.report_hardlinks)
     logger = log.StreamLogger(
         stream = sys.stderr,
-        min_level=log.DEBUG if config.verbose else log.INFO,
+        min_level = log.DEBUG if config.verbose else log.INFO,
     )
 
     find_dupes = core.DuplicateFinder(

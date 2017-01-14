@@ -20,6 +20,13 @@ def noop(*args, **kwargs):
 
 
 class DuplicateFinder(object):
+    """Main class for detecting files with duplicate content in a set.
+
+    After creating an instance of DuplicateFinder, use it like a function,
+    passing to it a single argument - an iterator of FileEntry objects. It will
+    yield a `DuplicateContentSet` for every set of files it discovers having
+    the same content.
+    """
     def __init__(
         self,
         content_key_func = None,
@@ -29,6 +36,52 @@ class DuplicateFinder(object):
         logger = None,
         on_error = None,
     ):
+        """Construct a new DuplicateFinder.
+
+        Arguments:
+            content_key_func (func or None): A function that uniquely
+                identifies an inode. This function should accept a single
+                FileEntry instance, and return any hashable, immutable value.
+                The requirement is that if a and b are FileEntry objects whose
+                paths are hardlinked to the same file, the same value is
+                returned for fn(a) and fn(b). If they are not, then fn(a) and
+                fn(b) must return different values.
+
+                FileEntry objects which are hardlinks to the same file will be
+                realized as a single FileContent instance with more than one
+                FileEntry object in its .entries property.
+
+                If this argument is None, then no attempt to identify hardlinks
+                is made. Every FileContent instance in a DuplicateContentSet
+                will have exactly one FileEntry.
+
+            max_open_files (int or None): Sets the maximum number of files to
+                be opened when reading from potentially duplicate files. If a
+                potential set contains more files than this number, older
+                filehandles will be closed before newer ones are opened.
+
+            buffer_size (int or None): Sets the buffer size used when reading
+                from and comparing potentially duplicate files.
+
+            cancel_func (func or None): A function that can cancel a file
+                comparison operation by returning True. It takes a single
+                DuplicateContentSet argument and returns a bool.  It is called
+                every `buffer_size` bytes (including before the first read),
+                with a DuplicateContentSet containing FileContent objects that
+                are all, thus far, identical in content.
+
+            logger (log.Logger or None): A logger object used to print debug
+                information.
+
+            on_error = (func or None): A function accepting 2 arguments:
+                `error` and `path`, called whenever an error is encountered.
+                `error` is an instance of EnvironmentError or one of its
+                subclasses. `path` is the path involved. To propagate the
+                error, reraise it from within this function. If None is
+                specified, errors are ignored. In any case, the error and
+                path are first sent to the `logger`.
+        """
+
         self._content_key_func = content_key_func
 
         if max_open_files is not None and max_open_files >= 1:
@@ -54,6 +107,15 @@ class DuplicateFinder(object):
             self._on_error = noop
 
     def __call__(self, entry_iter):
+        """Examine a set of files for duplicate content.
+
+        Args:
+            entry_iter (iter of FileEntry): The FileEntry objects to examine.
+
+        Yields:
+            a DuplicateContentSet containing FileContent objects found to have
+            identical content.
+        """
         sets = self._collect_size_sets(entry_iter)
         self._logger.debug("Set count: {}", len(sets))
         for _, contents in sorted(sets, key=operator.itemgetter(0), reverse=True):
@@ -190,22 +252,37 @@ class DuplicateFinder(object):
 
 
 class DuplicateContentSet(tuple):
+    """An immutable collection of FileContent instances.
+
+    A DuplicateContentSet is a tuple subclass containing FileContent objects,
+    with convenience methods added.
+    """
+
     def all_entries(self):
+        """Get every FileEntry object associated with every FileContent object.
+
+        Yields:
+            every FileEntry object attached to every FileContent object in the
+            collection.
+        """
         for content in self:
             for entry in content.entries:
                 yield entry
 
     @property
     def content_size(self):
+        """The common size of every file present in the DuplicateContentSet."""
         for entry in self.all_entries():
             return entry.size
 
     @property
     def total_size(self):
+        """The total size on disk of the files in the DuplicateContentSet."""
         return self.content_size * len(self)
 
     @property
     def entry_count(self):
+        """The total number of FileEntry objects in the DuplicateContentSet."""
         return sum(len(content.entries) for content in self)
 
     @classmethod
