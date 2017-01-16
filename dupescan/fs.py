@@ -125,6 +125,11 @@ class FileEntry(object):
         return os.stat(self._path)
 
     @property
+    @cache_prop
+    def lstat(self):
+        return os.lstat(self._path)
+
+    @property
     def size(self):
         return self.stat.st_size
 
@@ -150,7 +155,7 @@ class FileEntry(object):
 
     @property
     def is_symlink(self):
-        return stat.S_ISLNK(self.stat.st_mode)
+        return stat.S_ISLNK(self.lstat.st_mode)
 
 
 class FileContent(object):
@@ -191,36 +196,66 @@ class FileContent(object):
         return None
 
 
-def flat_iterator(paths, dir_entry_filter=None, file_entry_filter=None):
-    if dir_entry_filter is None:
-        dir_entry_filter = lambda _: True
+def catch_filter(inner_func, error_handler_func):
+    if inner_func is None:
+        def always_true(*args, **kwargs):
+            return True
+        return always_true
 
-    if file_entry_filter is None:
-        file_entry_filter = lambda _: True
+    def wrapped_func(*args, **kwargs):
+        try:
+            return inner_func(*args, **kwargs)
+        except EnvironmentError as env_error:
+            if error_handler_func is not None:
+                error_handler_func(env_error)
+            return False
+
+    return wrapped_func
+
+
+def flat_iterator(paths, dir_entry_filter=None, file_entry_filter=None, onerror=None):
+    dir_entry_filter = catch_filter(dir_entry_filter, onerror)
+    file_entry_filter = catch_filter(file_entry_filter, onerror)
 
     for index, path in enumerate(paths):
         entry = FileEntry(path, path, index)
-        if entry.is_file:
+        try:
+            is_file = entry.is_file
+        except EnvironmentError as env_error:
+            onerror(env_error)
+            continue
+
+        if is_file:
             if file_entry_filter(entry):
                 yield entry
         elif dir_entry_filter(entry):
             yield entry
 
 
-def recurse_iterator(paths, dir_entry_filter=None, file_entry_filter=None):
-    if file_entry_filter is None:
-        file_entry_filter = lambda _: True
+def recurse_iterator(paths, dir_entry_filter=None, file_entry_filter=None, onerror=None):
+    dir_entry_filter = catch_filter(dir_entry_filter, onerror)
+    file_entry_filter = catch_filter(file_entry_filter, onerror)
 
     for root_index, root in enumerate(paths):
         root_entry = FileEntry(root, root, root_index)
-        if root_entry.is_dir:
-            for parent, dirs, files in os.walk(root):
+
+        try:
+            root_is_dir = root_entry.is_dir
+        except EnvironmentError as env_error:
+            onerror(env_error)
+            continue
+
+        filter_func = dir_entry_filter if root_is_dir else file_entry_filter
+        if not filter_func(root_entry):
+            continue
+
+        if root_is_dir:
+            for parent, dirs, files in os.walk(root, onerror):
                 parent_entry = FileEntry(parent, root, root_index)
-                if dir_entry_filter:
-                    dirs[:] = [
-                        d for d in dirs
-                        if dir_entry_filter(parent_entry / d)
-                    ]
+                dirs[:] = [
+                    d for d in dirs
+                    if dir_entry_filter(parent_entry / d)
+                ]
 
                 for f in files:
                     file_entry = parent_entry / f

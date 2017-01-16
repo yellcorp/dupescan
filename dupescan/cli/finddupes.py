@@ -271,13 +271,14 @@ def scan(paths, config=None):
     if config is None:
         config = ScanConfig()
 
-    entry_iter = create_file_iterator(paths, config.recurse, config.min_file_size, config.include_symlinks)
-    content_indexer = platform.posix_inode if config.report_hardlinks else None # todo: windows hardlink detector
-    reporter = create_reporter(config.prefer, config.report_hardlinks)
     logger = log.StreamLogger(
         stream = sys.stderr,
         min_level = log.DEBUG if config.verbose else log.INFO,
     )
+
+    entry_iter = create_file_iterator(paths, logger, config.recurse, config.min_file_size, config.include_symlinks)
+    content_indexer = platform.posix_inode if config.report_hardlinks else None # todo: windows hardlink detector
+    reporter = create_reporter(config.prefer, config.report_hardlinks)
 
     find_dupes = core.DuplicateFinder(
         content_key_func = content_indexer,
@@ -296,7 +297,14 @@ def scan(paths, config=None):
         reporter.print("# Elapsed time: {}".format(units.format_duration(time.time() - start_time)))
 
 
-def create_file_iterator(paths, recurse=False, min_file_size=1, include_symlinks=False):
+def create_file_iterator(paths, logger=None, recurse=False, min_file_size=1, include_symlinks=False):
+    if logger is not None:
+        def onerror(env_error):
+            logger.error(str(env_error))
+    else:
+        def onerror(_):
+            pass
+
     ifunc = (
         fs.recurse_iterator if recurse
         else fs.flat_iterator
@@ -313,7 +321,7 @@ def create_file_iterator(paths, recurse=False, min_file_size=1, include_symlinks
     file_filter = funcutil.and_of(symlink_filter, file_size_filter)
     dir_filter = symlink_filter
 
-    return ifunc(paths, dir_filter, file_filter)
+    return ifunc(paths, dir_filter, file_filter, onerror)
 
 
 def cancel_if_single_root(dupe_set):
