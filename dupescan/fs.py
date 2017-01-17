@@ -200,6 +200,36 @@ class FileContent(object):
         return None
 
 
+class MarkableFileContent(FileContent):
+    __slots__ = ("marked",)
+
+    def __init__(self, address, entries=None, entry=None, marked=None):
+        super().__init__(address, entries=entries, entry=entry)
+        self.marked = marked
+
+    @classmethod
+    def from_immutable(cls, file_content, marked=False):
+        return cls(
+            address = file_content.address,
+            entries = file_content.entries,
+            marked = marked,
+        )
+
+    def __hash__(self):
+        return object.__hash__(self)
+
+    def __eq__(self, other):
+        return object.__eq__(self, other)
+
+    def __repr__(self):
+        return "%s(%r, %r, %r)" % (
+            type(self).__name__,
+            self.address,
+            self.entries,
+            self.marked,
+        )
+
+
 def catch_filter(inner_func, error_handler_func):
     if inner_func is None:
         def always_true(*args, **kwargs):

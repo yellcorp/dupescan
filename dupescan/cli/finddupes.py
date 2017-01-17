@@ -393,15 +393,15 @@ def create_reporter(prefer=None, report_hardlinks=False):
                 print(line, file=sys.stderr)
             raise
 
-    return Reporter(show_hardlink_info=report_hardlinks, selector_func=selector)
+    return Reporter(show_hardlink_info=report_hardlinks, selector=selector)
 
 
 SELECTION_MARKER_UNIQUE =    ">"
 SELECTION_MARKER_NONUNIQUE = "?"
 class Reporter(object):
-    def __init__(self, show_hardlink_info=True, selector_func=None, output_stream=sys.stdout):
+    def __init__(self, show_hardlink_info=True, selector=None, output_stream=sys.stdout):
         self.show_hardlink_info = show_hardlink_info
-        self.selector_func = selector_func
+        self.selector = selector
         self.output_stream = output_stream
 
     def print(self, *args):
@@ -415,17 +415,16 @@ class Reporter(object):
             excess_size=units.format_byte_count(dupe_set.total_size - dupe_set.content_size)
         ))
 
-        selected_contents = set()
-        if self.selector_func is not None:
+        if self.selector is not None:
             try:
-                selected_entries = self.selector_func.pick(dupe_set.all_entries())
-            except EnvironmentError as ee:
-                self.print("## Skipping selection due to error: {!s}".format(ee))
-            else:
-                selected_contents.update(select_content_by_entries(dupe_set, selected_entries))
+                mark(self.selector, dupe_set)
+            except EnvironmentError as env_error:
+                self.print("## Skipping selection due to error: {!s}".format(env_error))
+                for content in dupe_set:
+                    content.marked = False
 
         keep_marker = (
-            SELECTION_MARKER_UNIQUE if len(selected_contents) == 1
+            SELECTION_MARKER_UNIQUE if unique_marked(dupe_set)
             else SELECTION_MARKER_NONUNIQUE
         )
 
@@ -445,23 +444,26 @@ class Reporter(object):
 
             for entry in sorted(content.entries, key=lambda e: e.path):
                 self.print("{keep_marker} {path}".format(
-                    keep_marker=keep_marker if content in selected_contents else " ",
+                    keep_marker=keep_marker if content.marked else " ",
                     path=report.format_path(entry.path)
                 ))
         self.print()
 
 
-def select_content_by_entries(contents, selected_entries):
-    selected_paths = frozenset(e.path for e in selected_entries)
-    selected_contents = set()
+def mark(selector, markable_contents):
+    marked_entries = frozenset(selector.pick(markable_contents.all_entries()))
+    for content in markable_contents:
+        content.marked = any(entry in marked_entries for entry in content.entries)
 
+
+def unique_marked(contents):
+    count = 0
     for content in contents:
-        if (
-            content not in selected_contents and
-            any(entry.path in selected_paths for entry in content.entries)
-        ):
-            selected_contents.add(content)
-            yield content
+        if content.marked:
+            count += 1
+            if count == 2:
+                return False
+    return count == 1
 
 
 def highlight_sample(sample, line_width, hl_pos, hl_length):
