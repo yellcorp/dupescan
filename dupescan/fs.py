@@ -187,7 +187,11 @@ class FileContent(object):
         return ""
 
     def __repr__(self):
-        return "FileInstance(%r, entries=%r)" % (self.address, self.entries)
+        return "%s(%r, entries=%r)" % (
+            type(self).__name__,
+            self.address,
+            self.entries,
+        )
 
     @property
     def entry(self):
