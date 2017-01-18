@@ -37,7 +37,7 @@ def build_property_graph(graph):
         (["dir/ectory name"],             lambda p: p.parent.path.basename),
         (["ext/ension"],                  lambda p: p.extension),
         (["mtime", "modification time?"], lambda p: p.mtime),
-        (["index"],                       lambda p: p.root_index + 1),
+        (["index"],                       lambda p: p.root.index + 1),
     ):
         prop = EntryProperty(token_sequences, func)
         graph.add(prop.token_sequences, prop)

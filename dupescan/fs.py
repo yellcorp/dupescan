@@ -1,3 +1,4 @@
+from collections import namedtuple
 import itertools
 import os
 import stat
@@ -20,10 +21,8 @@ def cache_prop(method):
 # pathlib.Path is hard (impossible?) to subclass, so here's a platform-neutral
 # partial re-do that also caches its result, and lets us tag it with extra info
 class FileEntry(object):
-    def __init__(self, path, root=None, root_index=None):
+    def __init__(self, path):
         self._path = path
-        self._root = root
-        self._root_index = root_index
 
         self._dirname = None
         self._basename = None
@@ -33,7 +32,7 @@ class FileEntry(object):
         self._cache = { }
 
     def _copy_with_path(self, path):
-        return FileEntry(path, self._root, self._root_index)
+        return FileEntry(path)
 
     def _split_path(self):
         self._dirname, self._basename = os.path.split(self._path)
@@ -43,41 +42,23 @@ class FileEntry(object):
         return str(self._path)
 
     def __repr__(self):
-        return "%s(%r, %r, %r)" % (
+        return "%s(%r)" % (
             type(self).__name__,
             self._path,
-            self._root,
-            self._root_index
         )
 
-    def __hash__(self, *args, **kwargs):
-        return (
-            hash(self._path) ^
-            hash(self._root) ^
-            hash(self._root_index)
-        )
+    def __hash__(self):
+        return hash(self._path)
 
     def __eq__(self, other):
         if not isinstance(other, FileEntry):
             return NotImplemented
 
-        return (
-            self._path == other.path and
-            self._root == other.root and
-            self._root_index == other._root_index
-        )
+        return self._path == other.path
 
     @property
     def path(self):
         return self._path
-
-    @property
-    def root(self):
-        return self._root
-
-    @property
-    def root_index(self):
-        return self._root_index
 
     @property
     def basename(self):
@@ -156,6 +137,47 @@ class FileEntry(object):
     @property
     def is_symlink(self):
         return stat.S_ISLNK(self.lstat.st_mode)
+
+
+Root = namedtuple("Root", ("path", "index"))
+
+
+class RootAwareFileEntry(FileEntry):
+    def __init__(self, path, root=None):
+        FileEntry.__init__(self, path)
+        if root is not None:
+            self._root = root
+        else:
+            self._root = Root(None, None)
+
+    def _copy_with_path(self, path):
+        return RootAwareFileEntry(path, self._root)
+    
+    def __repr__(self):
+        return "%s(%r, %r)" % (
+            type(self).__name__,
+            self._path,
+            self._root,
+        )
+
+    def __hash__(self):
+        return (
+            hash(self._path) ^
+            hash(self._root)
+        )
+
+    def __eq__(self, other):
+        if not isinstance(other, FileEntry):
+            return NotImplemented
+
+        return (
+            self._path == other.path and
+            self._root == other.root
+        )
+
+    @property
+    def root(self):
+        return self._root
 
 
 class FileContent(object):
@@ -252,7 +274,8 @@ def flat_iterator(paths, dir_entry_filter=None, file_entry_filter=None, onerror=
     file_entry_filter = catch_filter(file_entry_filter, onerror)
 
     for index, path in enumerate(paths):
-        entry = FileEntry(path, path, index)
+        root = Root(path, index)
+        entry = RootAwareFileEntry(path, root)
         try:
             is_file = entry.is_file
         except EnvironmentError as env_error:
@@ -270,8 +293,9 @@ def recurse_iterator(paths, dir_entry_filter=None, file_entry_filter=None, onerr
     dir_entry_filter = catch_filter(dir_entry_filter, onerror)
     file_entry_filter = catch_filter(file_entry_filter, onerror)
 
-    for root_index, root in enumerate(paths):
-        root_entry = FileEntry(root, root, root_index)
+    for root_index, root_path in enumerate(paths):
+        root_spec = Root(root_path, root_index)
+        root_entry = RootAwareFileEntry(root_path, root_spec)
 
         try:
             root_is_dir = root_entry.is_dir
@@ -284,8 +308,8 @@ def recurse_iterator(paths, dir_entry_filter=None, file_entry_filter=None, onerr
             continue
 
         if root_is_dir:
-            for parent, dirs, files in os.walk(root, onerror):
-                parent_entry = FileEntry(parent, root, root_index)
+            for parent, dirs, files in os.walk(root_path, onerror):
+                parent_entry = RootAwareFileEntry(parent, root_spec)
                 dirs[:] = [
                     d for d in dirs
                     if dir_entry_filter(parent_entry / d)
