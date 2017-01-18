@@ -38,4 +38,4 @@ def posix_inode(entry):
 
 
 # TODO
-# def windows_content_id():
+# def windows_instance_id():

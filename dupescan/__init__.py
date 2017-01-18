@@ -7,5 +7,5 @@ __version__ = "0.0.15-develop"
 
 from dupescan.core import (
     DuplicateFinder,
-    DuplicateContentSet,
+    DuplicateInstanceSet,
 )

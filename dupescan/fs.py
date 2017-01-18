@@ -180,7 +180,7 @@ class RootAwareFileEntry(FileEntry):
         return self._root
 
 
-class FileContent(object):
+class FileInstance(object):
     __slots__ = ("address", "entries")
 
     def __init__(self, address, entries=None, entry=None):
@@ -198,7 +198,7 @@ class FileContent(object):
 
     def __eq__(self, other):
         return (
-            isinstance(other, FileContent) and
+            isinstance(other, FileInstance) and
             self.address == other.address and
             self.entries == other.entries
         )

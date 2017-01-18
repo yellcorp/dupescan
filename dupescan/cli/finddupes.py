@@ -277,11 +277,11 @@ def scan(paths, config=None):
     )
 
     entry_iter = create_file_iterator(paths, logger, config.recurse, config.min_file_size, config.include_symlinks)
-    content_indexer = platform.posix_inode if config.report_hardlinks else None # todo: windows hardlink detector
+    instance_indexer = platform.posix_inode if config.report_hardlinks else None # todo: windows hardlink detector
     reporter = create_reporter(config.prefer, config.report_hardlinks)
 
     find_dupes = core.DuplicateFinder(
-        content_key_func = content_indexer,
+        instance_key_func = instance_indexer,
         buffer_size = config.buffer_size,
         cancel_func = cancel_if_single_root if config.only_mixed_roots else None,
         logger = logger,
@@ -327,8 +327,8 @@ def create_file_iterator(paths, logger=None, recurse=False, min_file_size=1, inc
 def cancel_if_single_root(dupe_set):
     roots = set(
         entry.root_index
-        for content in dupe_set
-        for entry in content.entries
+        for instance in dupe_set
+        for entry in instance.entries
     )
 
     return len(roots) <= 1
@@ -411,8 +411,8 @@ class Reporter(object):
         self.print("## Size: {file_size} Instances: {inst_count} Excess: {excess_size} Names: {name_count}".format(
             inst_count=len(dupe_set),
             name_count=dupe_set.entry_count,
-            file_size=units.format_byte_count(dupe_set.content_size),
-            excess_size=units.format_byte_count(dupe_set.total_size - dupe_set.content_size)
+            file_size=units.format_byte_count(dupe_set.instance_size),
+            excess_size=units.format_byte_count(dupe_set.total_size - dupe_set.instance_size)
         ))
 
         # selection is done by entry
@@ -425,38 +425,38 @@ class Reporter(object):
 
         # but to test uniqueness, we go by content. for example, it's
         # considered unique if multiple entries are returned, but they
-        # point to the one content, as there's only one instance of the file
-        selected_contents = set(
-            content for content in dupe_set
-            if any(entry in selected_entries for entry in content.entries)
+        # point to the one instance
+        selected_instances = set(
+            instance for instance in dupe_set
+            if any(entry in selected_entries for entry in instance.entries)
         )
 
         keep_marker = (
-            SELECTION_MARKER_UNIQUE if len(selected_contents) == 1
+            SELECTION_MARKER_UNIQUE if len(selected_instances) == 1
             else SELECTION_MARKER_NONUNIQUE
         )
 
-        # if a content has any of its entries marked, mark the others too
-        for content in selected_contents:
-            selected_entries.update(content.entries)
+        # if an instance has any of its entries marked, mark the others as well
+        for instance in selected_instances:
+            selected_entries.update(instance.entries)
 
         show_hardlink_header = self.show_hardlink_info
-        for index, content in enumerate(
+        for index, instance in enumerate(
             sorted(
                 dupe_set,
                 key=lambda c: len(c.entries), reverse=True
             )
         ):
             if show_hardlink_header:
-                if len(content.entries) == 1:
+                if len(instance.entries) == 1:
                     self.print("# Separate instances follow")
                     show_hardlink_header = False
                 else:
                     self.print("# Instance {}".format(index + 1))
 
-            for entry in sorted(content.entries, key=lambda e: e.path):
+            for entry in sorted(instance.entries, key=lambda e: e.path):
                 self.print("{keep_marker} {path}".format(
-                    keep_marker=keep_marker if content in selected_contents else " ",
+                    keep_marker=keep_marker if instance in selected_instances else " ",
                     path=report.format_path(entry.path)
                 ))
         self.print()

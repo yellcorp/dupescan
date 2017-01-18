@@ -11,7 +11,7 @@ from dupescan import (
 
 __all__ = (
     "DuplicateFinder",
-    "DuplicateContentSet",
+    "DuplicateInstanceSet",
 )
 
 
@@ -25,12 +25,12 @@ class DuplicateFinder(object):
 
     After creating an instance of DuplicateFinder, use it like a function,
     passing to it a single argument - an iterator of FileEntry objects. It will
-    yield a `DuplicateContentSet` for every set of files it discovers having
+    yield a `DuplicateInstanceSet` for every set of files it discovers having
     the same content.
     """
     def __init__(
         self,
-        content_key_func = None,
+        instance_key_func = None,
         max_open_files = None,
         buffer_size = None,
         cancel_func = None,
@@ -41,7 +41,7 @@ class DuplicateFinder(object):
         """Construct a new DuplicateFinder.
 
         Arguments:
-            content_key_func (func or None): A function that uniquely
+            instance_key_func (func or None): A function that uniquely
                 identifies an inode. This function should accept a single
                 FileEntry instance, and return any hashable, immutable value.
                 The requirement is that if a and b are FileEntry objects whose
@@ -50,11 +50,11 @@ class DuplicateFinder(object):
                 fn(b) must return different values.
 
                 FileEntry objects which are hardlinks to the same file will be
-                realized as a single FileContent instance with more than one
+                realized as a single FileInstance instance with more than one
                 FileEntry object in its .entries property.
 
                 If this argument is None, then no attempt to identify hardlinks
-                is made. Every FileContent instance in a DuplicateContentSet
+                is made. Every FileInstance instance in a DuplicateInstanceSet
                 will have exactly one FileEntry.
 
             max_open_files (int or None): Sets the maximum number of files to
@@ -67,10 +67,10 @@ class DuplicateFinder(object):
 
             cancel_func (func or None): A function that can cancel a file
                 comparison operation by returning True. It takes a single
-                DuplicateContentSet argument and returns a bool.  It is called
+                DuplicateInstanceSet argument and returns a bool.  It is called
                 every `buffer_size` bytes (including before the first read),
-                with a DuplicateContentSet containing FileContent objects that
-                are all, thus far, identical in content.
+                with a DuplicateInstanceSet containing FileInstance objects
+                that are all, thus far, identical in content.
 
             logger (log.Logger or None): A logger object used to print debug
                 information.
@@ -79,7 +79,7 @@ class DuplicateFinder(object):
                 reporting progress. A ProgressHandler is an object that has two
                 methods: `progress(sets, bytes_read, bytes_total)` and
                 `clear()`. `progress` will be called periodically during file
-                reads. `sets` will be a list of DuplicateContentSet objects,
+                reads. `sets` will be a list of DuplicateInstanceSet objects,
                 reflecting the current state of the compare operation.
                 `bytes_read` is the number of bytes read from a single
                 representative file, and `bytes_total` is the file size.
@@ -91,11 +91,11 @@ class DuplicateFinder(object):
                 `error` is an instance of EnvironmentError or one of its
                 subclasses. `path` is the path involved. To propagate the
                 error, reraise it from within this function. If None is
-                specified, errors are ignored. In any case, the error and
-                path are first sent to the `logger`.
+                specified, errors are ignored. In any case, the error and path
+                are first sent to the `logger`.
         """
 
-        self._content_key_func = content_key_func
+        self._instance_key_func = instance_key_func
 
         if max_open_files is not None and max_open_files >= 1:
             self._max_open_files = max_open_files
@@ -131,14 +131,14 @@ class DuplicateFinder(object):
             entry_iter (iter of FileEntry): The FileEntry objects to examine.
 
         Yields:
-            a DuplicateContentSet containing FileContent objects found to have
-            identical content.
+            a DuplicateInstanceSet containing FileInstance objects found to
+            have identical content.
         """
         sets = self._collect_size_sets(entry_iter)
         self._logger.debug("Set count: {}", len(sets))
-        for _, contents in sorted(sets, key=operator.itemgetter(0), reverse=True):
-            for same_contents_set in self._search_content_in_size_set(contents):
-                yield same_contents_set
+        for _, instances in sorted(sets, key=operator.itemgetter(0), reverse=True):
+            for dupe_set in self._compare_content_in_size_set(instances):
+                yield dupe_set
 
     def _log_error(self, error, path=None):
         if path is None:
@@ -149,10 +149,10 @@ class DuplicateFinder(object):
     def _collect_size_sets(self, entry_iter):
         stats = dict(files=0, errors=0)
 
-        if self._content_key_func is None:
+        if self._instance_key_func is None:
             indexer = AddressIgnorer()
         else:
-            indexer = AddressIndexer(self._content_key_func)
+            indexer = AddressIndexer(self._instance_key_func)
 
         self._logger.debug("Start file enumeration")
         for entry in entry_iter:
@@ -171,17 +171,17 @@ class DuplicateFinder(object):
 
         return list(indexer.sets())
 
-    def _search_content_in_size_set(self, file_content_iter):
+    def _compare_content_in_size_set(self, instance_iter):
         stats = dict(bytes_read=0, completed=0, early_out=0, canceled=0)
         last_progress = 0
 
         pool = streampool.StreamPool(self._max_open_files)
 
         initial_set = [
-            ContentStreamPair(content, pool.open(content.entry.path))
-            for content in file_content_iter
+            InstanceStreamPair(instance, pool.open(instance.entry.path))
+            for instance in instance_iter
         ]
-        file_size = initial_set[0].content.entry.size
+        file_size = initial_set[0].instance.entry.size
 
         current_sets = [ initial_set ]
         self._do_progress_callback(current_sets, 0, file_size)
@@ -191,7 +191,7 @@ class DuplicateFinder(object):
             assert len(compare_set) > 0, "len(compare_set) <= 0"
 
             if self._cancel_func is not None:
-                if self._cancel_func(DuplicateContentSet._from_cs_set(compare_set)):
+                if self._cancel_func(DuplicateInstanceSet._from_is_pairs(compare_set)):
                     stats["canceled"] += 1
                     for cs in compare_set:
                         cs.stream.close()
@@ -227,13 +227,13 @@ class DuplicateFinder(object):
                         stats["bytes_read"] += len(buffer)
 
                     except EnvironmentError as read_error:
-                        self._log_error(read_error, stream.content.entry.path)
-                        self._on_error(read_error, stream.content.entry.path)
+                        self._log_error(read_error, stream.instance.entry.path)
+                        self._on_error(read_error, stream.instance.entry.path)
                         try:
                             stream.close()
                         except EnvironmentError as close_error:
-                            self._log_error(close_error, stream.content.entry.path)
-                            self._on_error(close_error, stream.content.entry.path)
+                            self._log_error(close_error, stream.instance.entry.path)
+                            self._on_error(close_error, stream.instance.entry.path)
                         continue
 
                     if stats["bytes_read"] - last_progress > PROGRESS_CALLBACK_FREQUENCY:
@@ -263,12 +263,12 @@ class DuplicateFinder(object):
 
                 of_interest = (
                     (len(compare_set) >  1 and complete) or
-                    (len(compare_set) == 1 and len(compare_set[0].content.entries) > 1)
+                    (len(compare_set) == 1 and len(compare_set[0].instance.entries) > 1)
                 )
 
                 if of_interest:
                     self._progress_handler.clear()
-                    yield DuplicateContentSet._from_cs_set(compare_set)
+                    yield DuplicateInstanceSet._from_is_pairs(compare_set)
 
                 if close_set:
                     for cs in compare_set:
@@ -288,7 +288,7 @@ class DuplicateFinder(object):
     def _do_progress_callback(self, cs_sets, file_pos, file_size):
         self._progress_handler.progress(
             [
-                DuplicateContentSet._from_cs_set(cs)
+                DuplicateInstanceSet._from_is_pairs(cs)
                 for cs in cs_sets
             ],
             file_pos,
@@ -296,43 +296,43 @@ class DuplicateFinder(object):
         )
 
 
-class DuplicateContentSet(tuple):
-    """An immutable collection of FileContent instances.
+class DuplicateInstanceSet(tuple):
+    """An immutable collection of FileInstance instances.
 
-    A DuplicateContentSet is a tuple subclass containing FileContent objects,
+    A DuplicateInstanceSet is a tuple subclass containing FileInstance objects,
     with convenience methods added.
     """
 
     def all_entries(self):
-        """Get every FileEntry object associated with every FileContent object.
+        """Get every FileEntry object associated with every FileInstance object.
 
         Yields:
-            every FileEntry object attached to every FileContent object in the
+            every FileEntry object attached to every FileInstance object in the
             collection.
         """
-        for content in self:
-            for entry in content.entries:
+        for instance in self:
+            for entry in instance.entries:
                 yield entry
 
     @property
-    def content_size(self):
-        """The common size of every file present in the DuplicateContentSet."""
+    def instance_size(self):
+        """The common size of every file present in the DuplicateInstanceSet."""
         for entry in self.all_entries():
             return entry.size
 
     @property
     def total_size(self):
-        """The total size on disk of the files in the DuplicateContentSet."""
-        return self.content_size * len(self)
+        """The total size on disk of the files in the DuplicateInstanceSet."""
+        return self.instance_size * len(self)
 
     @property
     def entry_count(self):
-        """The total number of FileEntry objects in the DuplicateContentSet."""
-        return sum(len(content.entries) for content in self)
+        """The total number of FileEntry objects in the DuplicateInstanceSet."""
+        return sum(len(instance.entries) for instance in self)
 
     @classmethod
-    def _from_cs_set(cls, cs_iter):
-        return cls(cs.content for cs in cs_iter)
+    def _from_is_pairs(cls, is_iter):
+        return cls(is_pair.instance for is_pair in is_iter)
 
 
 class NullProgressHandler(object):
@@ -344,26 +344,26 @@ class NullProgressHandler(object):
 
 
 class AddressIndexer(object):
-    def __init__(self, content_key_func):
-        self._content_key_func = content_key_func
+    def __init__(self, instance_key_func):
+        self._instance_key_func = instance_key_func
         self._size_index = collections.defaultdict(list)
 
     def add(self, entry):
-        key = self._content_key_func(entry)
+        key = self._instance_key_func(entry)
         self._size_index[entry.size].append((key, entry))
 
     def sets(self):
         for size, addr_entry_pairs in self._size_index.items():
             if len(addr_entry_pairs) > 1:
-                yield size, list(self._collect_content(addr_entry_pairs))
+                yield size, list(self._group_instances(addr_entry_pairs))
 
     @staticmethod
-    def _collect_content(addr_entry_pairs):
+    def _group_instances(addr_entry_pairs):
         addr_lookup = collections.defaultdict(list)
         for address, entry in addr_entry_pairs:
             addr_lookup[address].append(entry)
         for address, entries in addr_lookup.items():
-            yield fs.FileContent(address=address, entries=entries)
+            yield fs.FileInstance(address=address, entries=entries)
 
 
 class AddressIgnorer(object):
@@ -376,12 +376,12 @@ class AddressIgnorer(object):
     def sets(self):
         for size, entries in self._size_index.items():
             if len(entries) > 1:
-                yield size, [ fs.FileContent(address=None, entry=entry) for entry in entries ]
+                yield size, [ fs.FileInstance(address=None, entry=entry) for entry in entries ]
 
 
-ContentStreamPair = collections.namedtuple(
-    "ContentStreamPair", (
-        "content",
+InstanceStreamPair = collections.namedtuple(
+    "InstanceStreamPair", (
+        "instance",
         "stream",
     )
 )
