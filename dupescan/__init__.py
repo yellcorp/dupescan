@@ -2,7 +2,7 @@
 Library and command-line utilities to detect duplicate files by content.
 """
 
-__version__ = "0.0.15-develop"
+__version__ = "0.0.15"
 
 
 from dupescan.core import (
