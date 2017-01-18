@@ -415,18 +415,30 @@ class Reporter(object):
             excess_size=units.format_byte_count(dupe_set.total_size - dupe_set.content_size)
         ))
 
+        # selection is done by entry
+        selected_entries = set()
         if self.selector is not None:
             try:
-                mark(self.selector, dupe_set)
+                selected_entries.update(self.selector.pick(dupe_set.all_entries()))
             except EnvironmentError as env_error:
                 self.print("## Skipping selection due to error: {!s}".format(env_error))
-                for content in dupe_set:
-                    content.marked = False
+
+        # but to test uniqueness, we go by content. for example, it's
+        # considered unique if multiple entries are returned, but they
+        # point to the one content, as there's only one instance of the file
+        selected_contents = set(
+            content for content in dupe_set
+            if any(entry in selected_entries for entry in content.entries)
+        )
 
         keep_marker = (
-            SELECTION_MARKER_UNIQUE if unique_marked(dupe_set)
+            SELECTION_MARKER_UNIQUE if len(selected_contents) == 1
             else SELECTION_MARKER_NONUNIQUE
         )
+
+        # if a content has any of its entries marked, mark the others too
+        for content in selected_contents:
+            selected_entries.update(content.entries)
 
         show_hardlink_header = self.show_hardlink_info
         for index, content in enumerate(
@@ -444,26 +456,10 @@ class Reporter(object):
 
             for entry in sorted(content.entries, key=lambda e: e.path):
                 self.print("{keep_marker} {path}".format(
-                    keep_marker=keep_marker if content.marked else " ",
+                    keep_marker=keep_marker if content in selected_contents else " ",
                     path=report.format_path(entry.path)
                 ))
         self.print()
-
-
-def mark(selector, markable_contents):
-    marked_entries = frozenset(selector.pick(markable_contents.all_entries()))
-    for content in markable_contents:
-        content.marked = any(entry in marked_entries for entry in content.entries)
-
-
-def unique_marked(contents):
-    count = 0
-    for content in contents:
-        if content.marked:
-            count += 1
-            if count == 2:
-                return False
-    return count == 1
 
 
 def highlight_sample(sample, line_width, hl_pos, hl_length):

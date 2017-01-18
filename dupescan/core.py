@@ -268,7 +268,7 @@ class DuplicateFinder(object):
 
                 if of_interest:
                     self._progress_handler.clear()
-                    yield DuplicateContentSet._from_cs_set_markable(compare_set)
+                    yield DuplicateContentSet._from_cs_set(compare_set)
 
                 if close_set:
                     for cs in compare_set:
@@ -333,10 +333,6 @@ class DuplicateContentSet(tuple):
     @classmethod
     def _from_cs_set(cls, cs_iter):
         return cls(cs.content for cs in cs_iter)
-
-    @classmethod
-    def _from_cs_set_markable(cls, cs_iter):
-        return cls(fs.MarkableFileContent.from_immutable(cs.content) for cs in cs_iter)
 
 
 class NullProgressHandler(object):
