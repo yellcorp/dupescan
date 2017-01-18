@@ -294,7 +294,7 @@ def scan(paths, config=None):
         reporter.handle_dupe_set(dupe_set)
 
     if config.log_time:
-        reporter.print("# Elapsed time: {}".format(units.format_duration(time.time() - start_time)))
+        print("# Elapsed time: %s" % units.format_duration(time.time() - start_time))
 
 
 def create_file_iterator(paths, logger=None, recurse=False, min_file_size=1, include_symlinks=False):
@@ -385,6 +385,9 @@ class ProgressHandler(object):
 
 def create_reporter(prefer=None, report_hardlinks=False):
     selector = None
+
+    formatter = report.ReportFormatter(show_instance_info=report_hardlinks)
+
     if prefer:
         try:
             selector = criteria.parse_selector(prefer)
@@ -393,73 +396,51 @@ def create_reporter(prefer=None, report_hardlinks=False):
                 print(line, file=sys.stderr)
             raise
 
-    return Reporter(show_hardlink_info=report_hardlinks, selector=selector)
+    return Reporter(formatter, selector=selector)
 
 
-SELECTION_MARKER_UNIQUE =    ">"
-SELECTION_MARKER_NONUNIQUE = "?"
 class Reporter(object):
-    def __init__(self, show_hardlink_info=True, selector=None, output_stream=sys.stdout):
-        self.show_hardlink_info = show_hardlink_info
-        self.selector = selector
-        self.output_stream = output_stream
-
-    def print(self, *args):
-        print(*args, file=self.output_stream)
+    def __init__(self, formatter, selector=None, output_stream=sys.stdout):
+        self._formatter = formatter
+        self._selector = selector
+        self._output_stream = output_stream
 
     def handle_dupe_set(self, dupe_set):
-        self.print("## Size: {file_size} Instances: {inst_count} Excess: {excess_size} Names: {name_count}".format(
-            inst_count=len(dupe_set),
-            name_count=dupe_set.entry_count,
-            file_size=units.format_byte_count(dupe_set.instance_size),
-            excess_size=units.format_byte_count(dupe_set.total_size - dupe_set.instance_size)
-        ))
+        header = [
+            "Size: {inst_size} Instances: {inst_count} Excess: {excess_size} Names: {name_count}".format(
+                inst_size = units.format_byte_count(dupe_set.instance_size),
+                inst_count = len(dupe_set),
+                excess_size = units.format_byte_count(dupe_set.total_size - dupe_set.instance_size),
+                name_count = dupe_set.entry_count,
+            )
+        ]
 
         # selection is done by entry
-        selected_entries = set()
-        if self.selector is not None:
+        preferred_entries = set()
+        if self._selector is not None:
             try:
-                selected_entries.update(self.selector.pick(dupe_set.all_entries()))
+                preferred_entries.update(self._selector.pick(dupe_set.all_entries()))
             except EnvironmentError as env_error:
-                self.print("## Skipping selection due to error: {!s}".format(env_error))
+                header.append("Skipping selection due to error: %s" % env_error)
 
         # but to test uniqueness, we go by content. for example, it's
         # considered unique if multiple entries are returned, but they
         # point to the one instance
         selected_instances = set(
             instance for instance in dupe_set
-            if any(entry in selected_entries for entry in instance.entries)
-        )
-
-        keep_marker = (
-            SELECTION_MARKER_UNIQUE if len(selected_instances) == 1
-            else SELECTION_MARKER_NONUNIQUE
+            if any(entry in preferred_entries for entry in instance.entries)
         )
 
         # if an instance has any of its entries marked, mark the others as well
         for instance in selected_instances:
-            selected_entries.update(instance.entries)
+            preferred_entries.update(instance.entries)
 
-        show_hardlink_header = self.show_hardlink_info
-        for index, instance in enumerate(
-            sorted(
-                dupe_set,
-                key=lambda c: len(c.entries), reverse=True
-            )
+        for line in self._formatter.format_set(
+            dupe_set,
+            preferred_entries,
+            header,
         ):
-            if show_hardlink_header:
-                if len(instance.entries) == 1:
-                    self.print("# Separate instances follow")
-                    show_hardlink_header = False
-                else:
-                    self.print("# Instance {}".format(index + 1))
-
-            for entry in sorted(instance.entries, key=lambda e: e.path):
-                self.print("{keep_marker} {path}".format(
-                    keep_marker=keep_marker if instance in selected_instances else " ",
-                    path=report.format_path(entry.path)
-                ))
-        self.print()
+            print(line, file=self._output_stream)
 
 
 def highlight_sample(sample, line_width, hl_pos, hl_length):
@@ -498,15 +479,17 @@ def highlight_sample(sample, line_width, hl_pos, hl_length):
 def execute_report(report_path, dry_run):
     errors = False
     with open(report_path, "r") as report_stream:
-        for marked, unmarked in report.parse_report(report_stream):
-            if len(marked) > 0:
-                for path in unmarked:
-                    print(path, end="")
+        for dupe_set, marked_entries in report.parse_report(report_stream):
+            if len(marked_entries) > 0:
+                for entry in dupe_set.all_entries():
+                    if entry in marked_entries:
+                        continue
+                    print(entry.path, end="")
                     if not dry_run:
                         try:
-                            os.remove(path)
-                        except EnvironmentError as ee:
-                            print(": {!s}".format(ee), end="")
+                            os.remove(entry.path)
+                        except EnvironmentError as env_error:
+                            print(": %s" % env_error, end="")
                             errors = True
                     print()
     return 2 if errors else 0

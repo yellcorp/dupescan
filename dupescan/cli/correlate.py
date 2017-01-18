@@ -172,7 +172,7 @@ def generate_report(root1, root2, config):
             if entry is None:
                 continue
             out(format_ansi_sgr(
-                "%s %s" % (symbol, report.format_path(entry.path)),
+                "%s %r" % (symbol, entry.path),
                 sgr_lookup[action]
             ))
             symbol = " "
