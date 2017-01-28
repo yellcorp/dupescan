@@ -9,7 +9,6 @@ from dupescan import (
     core,
     fs,
     log,
-    report,
 )
 from dupescan.cli._common import add_common_cli_args
 
