@@ -326,7 +326,7 @@ def create_file_iterator(paths, logger=None, recurse=False, min_file_size=1, inc
 
 def cancel_if_single_root(dupe_set):
     roots = set(
-        entry.root_index
+        entry.root.index
         for instance in dupe_set
         for entry in instance.entries
     )
