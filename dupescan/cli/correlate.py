@@ -117,7 +117,7 @@ def run(argv=None):
     config.summary = not args.no_summary
     config.verbose = args.verbose
     config.file = sys.stdout
-    config.buffer_size = args.buffer_size,
+    config.buffer_size = args.buffer_size
 
     generate_report(*args.dirs, config)
 
