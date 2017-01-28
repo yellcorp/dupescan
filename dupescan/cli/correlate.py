@@ -202,7 +202,7 @@ def correlate(dupe_finder, root1, root2):
     for dupe_set in dupe_finder(entry_iter):
         partitions = ([ ], [ ])
         for instance in dupe_set:
-            partitions[instance.entry.root_index].append(instance.entry)
+            partitions[instance.entry.root.index].append(instance.entry)
             all_entries.remove(instance.entry)
 
         for a, b in itertools.zip_longest(*partitions):
@@ -218,8 +218,8 @@ def correlate(dupe_finder, root1, root2):
             yield action, a, b
 
     for entry in all_entries:
-        assert entry.root_index in (0, 1), "bad root_index while iterating unmatched entries"
-        if entry.root_index == 0:
+        assert entry.root.index in (0, 1), "bad root.index while iterating unmatched entries"
+        if entry.root.index == 0:
             yield Action.removed, entry, None
         else:
             yield Action.added, None, entry
