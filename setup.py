@@ -30,6 +30,9 @@ setup(
         "dupescan.cli",
         "dupescan.criteria",
     ],
+    package_data={
+        "dupescan.cli": [ "preferhelp" ]
+    },
     classifiers=[
         'Environment :: Console',
         'Intended Audience :: Developers',
