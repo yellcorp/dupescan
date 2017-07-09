@@ -74,7 +74,7 @@ class DuplicateFinder(object):
 
             logger (log.Logger or None): A logger object used to print debug
                 information.
-            
+
             progress_handler (ProgressHandler or None): A ProgressHandler for
                 reporting progress. A ProgressHandler is an object that has two
                 methods: `progress(sets, bytes_read, bytes_total)` and
