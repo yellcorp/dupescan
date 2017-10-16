@@ -210,7 +210,7 @@ def run(argv=None):
             print("Only -n/--dry-run can be used with -x/--execute. All other options must be omitted.", file=sys.stderr)
             return 1
 
-        return execute_report(args.execute, args.dry_run)
+        return execute_report(args.execute, args.dry_run, args.verbose)
 
 
 class ScanConfig(object):
@@ -477,7 +477,8 @@ def highlight_sample(sample, line_width, hl_pos, hl_length):
     yield highlight
 
 
-def execute_report(report_path, dry_run):
+def execute_report(report_path, dry_run, verbose):
+    verbose = verbose or dry_run
     errors = False
     with open(report_path, "r") as report_stream:
         for dupe_set, marked_entries in report.parse_report(report_stream):
@@ -485,11 +486,16 @@ def execute_report(report_path, dry_run):
                 for entry in dupe_set.all_entries():
                     if entry in marked_entries:
                         continue
-                    print(entry.path, end="")
+                    
+                    if verbose:
+                        print(entry.path, end="")
+
                     if not dry_run:
                         try:
                             os.remove(entry.path)
                         except EnvironmentError as env_error:
+                            if not verbose:
+                                print(entry.path, end="")
                             print(": %s" % env_error, end="")
                             errors = True
                     print()
