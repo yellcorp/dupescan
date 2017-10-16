@@ -1,3 +1,5 @@
+import codecs
+
 from dupescan import (
     __version__,
     platform,
@@ -19,3 +21,8 @@ def add_common_cli_args(arg_parser):
         action="version",
         version="%(prog)s " + __version__
     )
+
+
+def set_encoder_errors(stream, errors):
+    encoder = codecs.getwriter(stream.encoding)
+    return encoder(stream.buffer, errors)

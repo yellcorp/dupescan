@@ -10,7 +10,7 @@ from dupescan import (
     fs,
     log,
 )
-from dupescan.cli._common import add_common_cli_args
+from dupescan.cli._common import add_common_cli_args, set_encoder_errors
 
 
 __all__ = ("correlate", "generate_report", "run")
@@ -101,6 +101,8 @@ def main():
 
 
 def run(argv=None):
+    sys.stdout = set_encoder_errors(sys.stdout, "backslashreplace")
+
     p = get_arg_parser()
     args = p.parse_args(argv)
 

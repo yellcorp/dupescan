@@ -13,7 +13,7 @@ from dupescan import (
     report,
     units,
 )
-from dupescan.cli._common import add_common_cli_args
+from dupescan.cli._common import add_common_cli_args, set_encoder_errors
 
 
 __all__ = ("execute_report", "scan", "run")
@@ -148,6 +148,7 @@ def run(argv=None):
     Returns:
         Exit code for passing to sys.exit()
     """
+    sys.stdout = set_encoder_errors(sys.stdout, "backslashreplace")
 
     p = get_arg_parser()
     args = p.parse_args(argv)
@@ -400,10 +401,10 @@ def create_reporter(prefer=None, report_hardlinks=False):
 
 
 class Reporter(object):
-    def __init__(self, formatter, selector=None, output_stream=sys.stdout):
+    def __init__(self, formatter, selector=None, output_stream=None):
         self._formatter = formatter
         self._selector = selector
-        self._output_stream = output_stream
+        self._output_stream = output_stream or sys.stdout
 
     def handle_dupe_set(self, dupe_set):
         header = [
