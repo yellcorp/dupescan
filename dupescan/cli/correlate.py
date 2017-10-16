@@ -242,7 +242,7 @@ def format_ansi_sgr(string, sgr):
 def interpret_ansi_param(ansi, out_stream):
     if ansi is None:
         try:
-            ansi = out_stream.isatty()
+            ansi = sys.platform != "win32" and out_stream.isatty()
         except AttributeError:
             ansi = False
 
