@@ -277,7 +277,7 @@ def scan(paths, config=None):
     )
 
     entry_iter = create_file_iterator(paths, logger, config.recurse, config.min_file_size, config.include_symlinks)
-    instance_indexer = platform.posix_inode if config.report_hardlinks else None # todo: windows hardlink detector
+    instance_indexer = platform.dev_and_inode if config.report_hardlinks else None
     reporter = create_reporter(config.prefer, config.report_hardlinks)
 
     find_dupes = core.DuplicateFinder(

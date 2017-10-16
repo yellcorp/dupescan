@@ -1,7 +1,7 @@
 __all__ = (
     "DEFAULT_BUFFER_SIZE",
     "decide_max_open_files",
-    "posix_inode",
+    "dev_and_inode",
 )
 
 
@@ -32,10 +32,6 @@ def decide_max_open_files():
     return FALLBACK_MAX_OPEN_FILES
 
 
-def posix_inode(entry):
+def dev_and_inode(entry):
     entry_stat = entry.stat
     return (entry_stat.st_dev, entry_stat.st_ino)
-
-
-# TODO
-# def windows_instance_id():
