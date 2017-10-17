@@ -359,7 +359,14 @@ class DatabaseIndexer(object):
     def dispose(self):
         if self._path is None:
             return
-        
+
+        self._cursor.close()
+        self._cursor = None
+
+        self._conn.commit()
+        self._conn.close()
+        self._conn = None
+
         path = self._path
         self._path = None
 
