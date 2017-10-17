@@ -350,6 +350,10 @@ class DatabaseIndexer(object):
         self._cursor.execute("""\
             create index sizeindex on files (size)
         """)
+        self._cursor.execute("""\
+            create unique index pathindex on files (path)
+        """)
+
         self._conn.commit()
 
     def dispose(self):
@@ -403,17 +407,16 @@ class DatabaseIndexer(object):
             self._flush_insert()
 
     def end(self):
-        if len(self._insertq) > 0:
-            self._flush_insert()
+        self._flush_insert()
 
     def _flush_insert(self):
-        self._cursor.executemany("""\
-            insert into files values (?,?,?,?)
-        """, self._insertq)
-        self._conn.commit()
+        if len(self._insertq) > 0:
+            self._cursor.executemany("""\
+                insert or ignore into files values (?,?,?,?)
+            """, self._insertq)
+            self._conn.commit()
+            self._insertq.clear()
 
-        self._insertq.clear()
-    
     def sets(self):
         self.end()
 

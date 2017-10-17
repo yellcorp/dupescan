@@ -272,7 +272,7 @@ def scan(paths, config=None):
 
     start_time = time.time() if config.log_time else 0
 
-    for dupe_set in find_dupes(fs.unique_entries(entry_iter)):
+    for dupe_set in find_dupes(entry_iter):
         reporter.handle_dupe_set(dupe_set)
 
     if config.log_time:

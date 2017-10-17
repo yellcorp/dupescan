@@ -3,8 +3,6 @@ import itertools
 import os
 import stat
 
-from dupescan.collections import DelimitedStringSet
-
 
 def cache_prop(method):
     key = method.__name__
@@ -299,11 +297,3 @@ def recurse_iterator(paths, dir_entry_filter=None, file_entry_filter=None, onerr
 
         elif file_entry_filter(root_entry):
             yield root_entry
-
-
-def unique_entries(entry_iter):
-    seen = DelimitedStringSet(os.sep)
-    for entry in entry_iter:
-        if entry.path not in seen:
-            seen.add(entry.path)
-            yield entry
