@@ -119,12 +119,7 @@ def single_marked_instance(instances, marked_entries):
 
 
 class ReportFormatter(object):
-    def __init__(
-        self,
-        show_instance_info = False,
-        mark_glyphs = (">", "?")
-    ):
-        self._show_instance_info = show_instance_info
+    def __init__(self, mark_glyphs = (">", "?")):
         self._mark_glyphs = mark_glyphs
 
     def format_set(
@@ -149,20 +144,17 @@ class ReportFormatter(object):
         if marked_entries is None:
             marked_entries = set()
     
-        if self._show_instance_info:
-            instances = list(sorted(
-                dupe_set,
-                key = lambda i: len(i.entries),
-                reverse = True,
-            ))
-        else:
-            instances = dupe_set
+        instances = list(sorted(
+            dupe_set,
+            key = lambda i: len(i.entries),
+            reverse = True,
+        ))
     
         mark_glyph = self._mark_glyphs[
             0 if single_marked_instance(instances, marked_entries) else 1
         ]
 
-        show_instance_info = self._show_instance_info
+        show_instance_info = True
         for index, instance in enumerate(instances):
             if show_instance_info:
                 if len(instance.entries) == 1:

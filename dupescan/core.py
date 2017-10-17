@@ -1,5 +1,9 @@
+import atexit
 import collections
-import operator
+import os
+import sqlite3
+import sys
+import tempfile
 
 from dupescan import (
     fs,
@@ -30,7 +34,6 @@ class DuplicateFinder(object):
     """
     def __init__(
         self,
-        instance_key_func = None,
         max_open_files = None,
         buffer_size = None,
         cancel_func = None,
@@ -41,22 +44,6 @@ class DuplicateFinder(object):
         """Construct a new DuplicateFinder.
 
         Arguments:
-            instance_key_func (func or None): A function that uniquely
-                identifies an inode. This function should accept a single
-                FileEntry instance, and return any hashable, immutable value.
-                The requirement is that if a and b are FileEntry objects whose
-                paths are hardlinked to the same file, the same value is
-                returned for fn(a) and fn(b). If they are not, then fn(a) and
-                fn(b) must return different values.
-
-                FileEntry objects which are hardlinks to the same file will be
-                realized as a single FileInstance instance with more than one
-                FileEntry object in its .entries property.
-
-                If this argument is None, then no attempt to identify hardlinks
-                is made. Every FileInstance instance in a DuplicateInstanceSet
-                will have exactly one FileEntry.
-
             max_open_files (int or None): Sets the maximum number of files to
                 be opened when reading from potentially duplicate files. If a
                 potential set contains more files than this number, older
@@ -95,8 +82,6 @@ class DuplicateFinder(object):
                 are first sent to the `logger`.
         """
 
-        self._instance_key_func = instance_key_func
-
         if max_open_files is not None and max_open_files >= 1:
             self._max_open_files = max_open_files
         else:
@@ -134,9 +119,7 @@ class DuplicateFinder(object):
             a DuplicateInstanceSet containing FileInstance objects found to
             have identical content.
         """
-        sets = self._collect_size_sets(entry_iter)
-        self._logger.debug("Set count: {}", len(sets))
-        for _, instances in sorted(sets, key=operator.itemgetter(0), reverse=True):
+        for _size, instances in self._collect_size_sets(entry_iter):
             for dupe_set in self._compare_content_in_size_set(instances):
                 yield dupe_set
 
@@ -149,10 +132,7 @@ class DuplicateFinder(object):
     def _collect_size_sets(self, entry_iter):
         stats = dict(files=0, errors=0)
 
-        if self._instance_key_func is None:
-            indexer = AddressIgnorer()
-        else:
-            indexer = AddressIndexer(self._instance_key_func)
+        indexer = DatabaseIndexer()
 
         self._logger.debug("Start file enumeration")
         for entry in entry_iter:
@@ -169,7 +149,7 @@ class DuplicateFinder(object):
             **stats
         )
 
-        return list(indexer.sets())
+        return indexer.sets()
 
     def _compare_content_in_size_set(self, instance_iter):
         stats = dict(bytes_read=0, completed=0, early_out=0, canceled=0)
@@ -343,40 +323,120 @@ class NullProgressHandler(object):
         pass
 
 
-class AddressIndexer(object):
-    def __init__(self, instance_key_func):
-        self._instance_key_func = instance_key_func
-        self._size_index = collections.defaultdict(list)
+def fetch_iterator(sqlite_cursor):
+    while True:
+        chunk = sqlite_cursor.fetchmany()
+        if len(chunk) > 0:
+            for row in chunk:
+                yield row
+        else:
+            break
 
-    def add(self, entry):
-        key = self._instance_key_func(entry)
-        self._size_index[entry.size].append((key, entry))
 
-    def sets(self):
-        for size, addr_entry_pairs in self._size_index.items():
-            if len(addr_entry_pairs) > 1:
-                yield size, list(self._group_instances(addr_entry_pairs))
+class DatabaseIndexer(object):
+    def __init__(self):
+        self._dir = tempfile.mkdtemp()
+        self._path = os.path.join(self._dir, "dupescanindex")
+        atexit.register(self.dispose)
+
+        self._conn = sqlite3.connect(self._path)
+        self._insertq = [ ]
+
+        self._cursor = self._conn.cursor()
+        self._cursor.execute("""\
+            create table files
+            (size integer, path text, root text, rootn integer)
+        """)
+        self._cursor.execute("""\
+            create index sizeindex on files (size)
+        """)
+        self._conn.commit()
+
+    def dispose(self):
+        if self._path is None:
+            return
+        
+        path = self._path
+        self._path = None
+
+        try:
+            os.remove(path)
+            os.rmdir(self._dir)
+        except OSError as os_error:
+            print(str(os_error), file=sys.stderr)
+
+    def __del__(self):
+        self.dispose()
 
     @staticmethod
-    def _group_instances(addr_entry_pairs):
-        addr_lookup = collections.defaultdict(list)
-        for address, entry in addr_entry_pairs:
-            addr_lookup[address].append(entry)
-        for address, entries in addr_lookup.items():
-            yield fs.FileInstance(address=address, entries=entries)
+    def _to_db(entry):
+        return (
+            entry.size,
+            entry.path,
+            entry.root.path or "",
+            entry.root.index if entry.root.index is not None else -1
+        )
+    
+    @staticmethod
+    def _from_db(row):
+        _, path, root_path, root_index = row
+        
+        if root_index == -1:
+            root = None
+        else:
+            root = fs.Root(root_path, root_index)
+        return fs.RootAwareFileEntry(path, root)
 
+    @staticmethod
+    def _group_instances(entries):
+        ino_groups = collections.defaultdict(list)
+        for entry in entries:
+            ino_groups[entry.uid].append(entry)
 
-class AddressIgnorer(object):
-    def __init__(self):
-        self._size_index = collections.defaultdict(list)
+        for uid, entries in ino_groups.items():
+            yield fs.FileInstance(address=uid, entries=entries)
 
     def add(self, entry):
-        self._size_index[entry.size].append(entry)
+        self._insertq.append(DatabaseIndexer._to_db(entry))
 
+        if len(self._insertq) > 1024:
+            self._flush_insert()
+
+    def end(self):
+        if len(self._insertq) > 0:
+            self._flush_insert()
+
+    def _flush_insert(self):
+        self._cursor.executemany("""\
+            insert into files values (?,?,?,?)
+        """, self._insertq)
+        self._conn.commit()
+
+        self._insertq.clear()
+    
     def sets(self):
-        for size, entries in self._size_index.items():
-            if len(entries) > 1:
-                yield size, [ fs.FileInstance(address=None, entry=entry) for entry in entries ]
+        self.end()
+
+        unique_cursor = self._conn.cursor()
+        unique_cursor.execute("""\
+            select size, count(*) from files
+            group by size
+            having count(*) > 1
+        """)
+
+        for size, _count in fetch_iterator(unique_cursor):
+            set_cursor = self._conn.cursor()
+            set_cursor.execute("""\
+                select size, path, root, rootn from files
+                where size = ?
+            """, (size,))
+
+            entries = [
+                DatabaseIndexer._from_db(row)
+                for row in set_cursor.fetchall()
+            ]
+            set_cursor.close()
+            yield size, list(DatabaseIndexer._group_instances(entries))
 
 
 InstanceStreamPair = collections.namedtuple(

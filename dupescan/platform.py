@@ -30,8 +30,3 @@ def decide_max_open_files():
         pass
 
     return FALLBACK_MAX_OPEN_FILES
-
-
-def dev_and_inode(entry):
-    entry_stat = entry.stat
-    return (entry_stat.st_dev, entry_stat.st_ino)

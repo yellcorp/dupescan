@@ -138,13 +138,20 @@ class FileEntry(object):
     def is_symlink(self):
         return stat.S_ISLNK(self.lstat.st_mode)
 
+    @property
+    def uid(self):
+        return (
+            self.stat.st_dev,
+            self.stat.st_ino,
+        )
+
 
 Root = namedtuple("Root", ("path", "index"))
 
 
 class RootAwareFileEntry(FileEntry):
     def __init__(self, path, root=None):
-        FileEntry.__init__(self, path)
+        super().__init__(path)
         if root is not None:
             self._root = root
         else:

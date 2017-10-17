@@ -9,7 +9,6 @@ from dupescan import (
     fs,
     funcutil,
     log,
-    platform,
     report,
     units,
 )
@@ -46,16 +45,6 @@ def get_arg_parser():
         help="""Include zero-length files. All zero-length files are considered
                 to have identical content. This option is equivalent to
                 --min-size 0"""
-    )
-
-    p.add_argument("-a", "--aliases",
-        action="store_true",
-        help="""Check whether a single file has more than one name, which is
-                possible through hardlinks, as well as symlinks if the
-                -s/--symlinks option is specified. This check is used to skip
-                redundant content comparisons, add extra information to
-                reports, and preserve all paths pointing to a selected file
-                when the -p/--prefer option is used."""
     )
 
     p.add_argument("-r", "--recurse",
@@ -183,7 +172,6 @@ def run(argv=None):
         config.recurse = args.recurse
         config.only_mixed_roots = args.only_mixed_roots
         config.include_symlinks = args.symlinks
-        config.report_hardlinks = args.aliases
         config.prefer = args.prefer
         config.verbose = args.verbose
         config.progress = args.progress
@@ -199,7 +187,6 @@ def run(argv=None):
             args.paths,
             args.symlinks,
             args.zero,
-            args.aliases,
             args.recurse,
             args.only_mixed_roots,
             args.min_size,
@@ -229,9 +216,6 @@ class ScanConfig(object):
         include_symlinks (bool): If True, resolve symlinks, otherwise ignore
             them.
 
-        report_hardlinks (bool): If True, go to the effort of detecting
-            hardlinks, and call them out in the generated report.
-
         prefer (str or None): A 'prefer' string expressing how to choose at least
             one file from a set to be marked in the generated report.
 
@@ -251,7 +235,6 @@ class ScanConfig(object):
         self.only_mixed_roots = False
         self.min_file_size = 1
         self.include_symlinks = False
-        self.report_hardlinks = False
         self.prefer = None
         self.verbose = False
         self.progress = False
@@ -278,11 +261,9 @@ def scan(paths, config=None):
     )
 
     entry_iter = create_file_iterator(paths, logger, config.recurse, config.min_file_size, config.include_symlinks)
-    instance_indexer = platform.dev_and_inode if config.report_hardlinks else None
-    reporter = create_reporter(config.prefer, config.report_hardlinks)
+    reporter = create_reporter(config.prefer)
 
     find_dupes = core.DuplicateFinder(
-        instance_key_func = instance_indexer,
         buffer_size = config.buffer_size,
         cancel_func = cancel_if_single_root if config.only_mixed_roots else None,
         logger = logger,
@@ -384,10 +365,10 @@ class ProgressHandler(object):
         self._last_len = this_len
 
 
-def create_reporter(prefer=None, report_hardlinks=False):
+def create_reporter(prefer=None):
     selector = None
 
-    formatter = report.ReportFormatter(show_instance_info=report_hardlinks)
+    formatter = report.ReportFormatter()
 
     if prefer:
         try:
