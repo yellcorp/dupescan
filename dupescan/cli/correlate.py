@@ -130,7 +130,10 @@ class CorrelateConfig(object):
     def __init__(self):
         self.include_actions = None
 
-        # None: autodetect, True: use default, False: no colors, or tuple of 3 things to appear between \x1b[ and m
+        # None: autodetect
+        # True: use default
+        # False: no colors
+        # 3-tuple: things to appear between \x1b[ and m
         self.ansi = None
 
         self.summary = True
