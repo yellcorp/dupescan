@@ -97,7 +97,7 @@ def parse_report(line_iter):
 
         else:
             marked, path = line_data
-            entry = fs.FileEntry(path)
+            entry = fs.FileEntry.from_path(path)
             current_instance.append(entry)
             if marked:
                 marked_entries.add(entry)

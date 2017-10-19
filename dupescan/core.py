@@ -396,7 +396,7 @@ class DatabaseIndexer(object):
             root = None
         else:
             root = fs.Root(root_path, root_index)
-        return fs.RootAwareFileEntry(path, root)
+        return fs.FileEntry.from_path(path, root)
 
     @staticmethod
     def _group_instances(entries):
