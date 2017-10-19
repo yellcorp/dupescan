@@ -307,13 +307,15 @@ def create_file_iterator(paths, logger=None, recurse=False, min_file_size=1, inc
 
 
 def cancel_if_single_root(dupe_set):
-    roots = set(
-        entry.root.index
-        for instance in dupe_set
-        for entry in instance.entries
-    )
+    index = -1
 
-    return len(roots) <= 1
+    for entry in dupe_set.all_entries():
+        if index == -1:
+            index = entry.root.index
+        elif index != entry.root.index:
+            return False
+
+    return True
 
 
 VISUAL_SET_COUNT = "\u2800\u2840\u28C0\u28C4\u28E4\u28E6\u28F6\u28F7\u28FF"
