@@ -301,7 +301,7 @@ def create_file_iterator(paths, logger=None, recurse=False, min_file_size=1, inc
         symlink_filter = lambda e: not e.is_symlink
 
     file_filter = funcutil.and_of(symlink_filter, file_size_filter)
-    dir_filter = symlink_filter
+    dir_filter = None
 
     return ifunc(paths, dir_filter, file_filter, onerror)
 
