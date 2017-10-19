@@ -181,19 +181,20 @@ class DuplicateFinder(object):
             next_sets = [ ]
 
             if file_size == 0:
-                # files are zero length, so we know every one is going to result in a read
-                # of b"". skip it
+                # files are zero length, so we know every one is going to
+                # result in a read of b"". skip it
 
-                # we could early-out earlier than this, but doing it here guarantees that
-                # the callbacks (i.e. cancel_func, on_progress) behave consistently.
-                # at least until i tidy it up further
+                # we could early-out earlier than this, but doing it here
+                # guarantees that the callbacks (i.e. cancel_func, on_progress)
+                # behave consistently.  at least until i tidy it up further
                 buffers.append(b"")
                 next_sets.append(compare_set)
 
             elif len(compare_set) == 1:
-                # in this case there is just one actual file, and we know there's more than
-                # one hard/symlink to it otherwise it would've been filtered out earlier.
-                # in this case, pretend we read any non-empty string (huge hack alert) and leave the set
+                # in this case there is just one actual file, and we know
+                # there's more than one hard/symlink to it otherwise it
+                # would've been filtered out earlier.  in this case, pretend we
+                # read any non-empty string (huge hack alert) and leave the set
                 # unchanged.
                 buffers.append(b"dummy") # big ol hack
                 next_sets.append(compare_set)
@@ -284,7 +285,8 @@ class DuplicateInstanceSet(tuple):
     """
 
     def all_entries(self):
-        """Get every FileEntry object associated with every FileInstance object.
+        """Get every FileEntry object associated with every FileInstance
+        object.
 
         Yields:
             every FileEntry object attached to every FileInstance object in the
