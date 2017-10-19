@@ -4,10 +4,10 @@ import itertools
 class FileInstance(object):
     """A single file (inode) with one or more FileSystemEntries pointing to it"""
 
-    __slots__ = ("address", "entries")
+    __slots__ = ("identifier", "entries")
 
-    def __init__(self, address, entries=None, entry=None):
-        self.address = address
+    def __init__(self, identifier, entries=None, entry=None):
+        self.identifier = identifier
 
         # optimization - reduce copying if possible
         if entry is None and isinstance(entries, tuple):
@@ -22,12 +22,12 @@ class FileInstance(object):
             ))
 
     def __hash__(self):
-        return hash(self.address) ^ hash(self.entries)
+        return hash(self.identifier) ^ hash(self.entries)
 
     def __eq__(self, other):
         return (
             isinstance(other, FileInstance) and
-            self.address == other.address and
+            self.identifier == other.identifier and
             self.entries == other.entries
         )
 
@@ -37,7 +37,7 @@ class FileInstance(object):
     def __repr__(self):
         return "%s(%r, entries=%r)" % (
             type(self).__name__,
-            self.address,
+            self.identifier,
             self.entries,
         )
 

@@ -407,7 +407,7 @@ class DatabaseIndexer(object):
             ino_groups[entry.uid].append(entry)
 
         for uid, entries in ino_groups.items():
-            yield fs.FileInstance(address=uid, entries=entries)
+            yield fs.FileInstance(identifier=uid, entries=entries)
 
     def add(self, entry):
         self._insertq.append(DatabaseIndexer._to_db(entry))

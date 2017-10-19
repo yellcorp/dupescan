@@ -58,7 +58,7 @@ def parse_report(line_iter):
         if current_instance:
             #if current_set is None:
             #    raise ParseError("")
-            current_set.append(fs.FileInstance(address=None, entries=current_instance))
+            current_set.append(fs.FileInstance(identifier=None, entries=current_instance))
         current_instance = [ ]
 
     def end_set():
