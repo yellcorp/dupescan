@@ -400,15 +400,6 @@ class DatabaseIndexer(object):
             root = fs.Root(root_path, root_index)
         return fs.FileEntry.from_path(path, root)
 
-    @staticmethod
-    def _group_instances(entries):
-        ino_groups = collections.defaultdict(list)
-        for entry in entries:
-            ino_groups[entry.uid].append(entry)
-
-        for uid, entries in ino_groups.items():
-            yield fs.FileInstance(identifier=uid, entries=entries)
-
     def add(self, entry):
         self._insertq.append(DatabaseIndexer._to_db(entry))
 
@@ -448,7 +439,7 @@ class DatabaseIndexer(object):
                 for row in set_cursor.fetchall()
             ]
             set_cursor.close()
-            yield size, list(DatabaseIndexer._group_instances(entries))
+            yield size, list(fs.FileInstance.group_entries_by_identifier(entries))
 
 
 InstanceStreamPair = collections.namedtuple(

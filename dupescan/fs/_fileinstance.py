@@ -1,3 +1,4 @@
+import collections
 import itertools
 
 
@@ -44,3 +45,12 @@ class FileInstance(object):
     @property
     def entry(self):
         return self.entries[0] if len(self.entries) > 0 else None
+
+    @classmethod
+    def group_entries_by_identifier(cls, entries):
+        groups = collections.defaultdict(list)
+        for entry in entries:
+            groups[entry.uid].append(entry)
+
+        for uid, entries in groups.items():
+            yield cls(identifier=uid, entries=entries)
