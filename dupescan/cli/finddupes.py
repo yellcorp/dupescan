@@ -260,7 +260,7 @@ def scan(paths, config=None):
         min_level = log.DEBUG if config.verbose else log.INFO,
     )
 
-    entry_iter = create_file_iterator(paths, logger, config.recurse, config.min_file_size, config.include_symlinks)
+    entries = create_file_iterator(paths, logger, config.recurse, config.min_file_size, config.include_symlinks)
     reporter = create_reporter(config.prefer)
 
     find_dupes = core.DuplicateFinder(
@@ -272,7 +272,7 @@ def scan(paths, config=None):
 
     start_time = time.time() if config.log_time else 0
 
-    for dupe_set in find_dupes(entry_iter):
+    for dupe_set in find_dupes(entries):
         reporter.handle_dupe_set(dupe_set)
 
     if config.log_time:

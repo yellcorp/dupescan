@@ -195,7 +195,7 @@ def correlate(dupe_finder, root1, root2):
     all_entries = set()
     ignore_symlinks = lambda e: not e.is_symlink
 
-    entry_iter = tap_iterator(
+    entries = tap_iterator(
         all_entries.add,
         fs.recurse_iterator(
             (root1, root2),
@@ -204,7 +204,7 @@ def correlate(dupe_finder, root1, root2):
         )
     )
 
-    for dupe_set in dupe_finder(entry_iter):
+    for dupe_set in dupe_finder(entries):
         partitions = ([ ], [ ])
         for instance in dupe_set:
             partitions[instance.entry.root.index].append(instance.entry)

@@ -109,17 +109,17 @@ class DuplicateFinder(object):
         else:
             self._on_error = noop
 
-    def __call__(self, entry_iter):
+    def __call__(self, entries):
         """Examine a set of files for duplicate content.
 
         Args:
-            entry_iter (iter of FileEntry): The FileEntry objects to examine.
+            entries (iter of FileEntry): The FileEntry objects to examine.
 
         Yields:
             a DuplicateInstanceSet containing FileInstance objects found to
             have identical content.
         """
-        for _size, instances in self._collect_size_sets(entry_iter):
+        for _size, instances in self._collect_size_sets(entries):
             for dupe_set in self._compare_content_in_size_set(instances):
                 yield dupe_set
 
@@ -129,13 +129,13 @@ class DuplicateFinder(object):
         else:
             self._logger.error("{path!s}: {error!s}", path=path, error=error)
 
-    def _collect_size_sets(self, entry_iter):
+    def _collect_size_sets(self, entries):
         stats = dict(files=0, errors=0)
 
         indexer = DatabaseIndexer()
 
         self._logger.debug("Start file enumeration")
-        for entry in entry_iter:
+        for entry in entries:
             stats["files"] += 1
             try:
                 indexer.add(entry)
