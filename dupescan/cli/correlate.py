@@ -207,8 +207,9 @@ def correlate(dupe_finder, root1, root2):
     for dupe_set in dupe_finder(entries):
         partitions = ([ ], [ ])
         for instance in dupe_set:
-            partitions[instance.entry.root.index].append(instance.entry)
-            all_entries.remove(instance.entry)
+            for entry in instance.entries:
+                partitions[entry.root.index].append(entry)
+                all_entries.remove(instance.entry)
 
         for a, b in itertools.zip_longest(*partitions):
             assert not (a is None and b is None), "got (None, None) from zip_longest"
