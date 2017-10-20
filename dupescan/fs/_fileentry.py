@@ -98,8 +98,8 @@ class FileEntry(os.PathLike):
             return NotImplemented
 
         return (
-            self._dirname == other._dirname,
-            self._resource == other._resource,
+            self._dirname == other._dirname and
+            self._resource == other._resource and
             self._root == other._root
         )
 
