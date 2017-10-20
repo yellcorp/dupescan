@@ -66,7 +66,6 @@ class FileEntry(os.PathLike):
         else:
             self._dirname = dirname
         self._resource = resource
-        self._root = root
 
         self._splitext = None
         self._root = NO_ROOT if root is None else root
@@ -104,7 +103,7 @@ class FileEntry(os.PathLike):
         )
 
     def _copy_with_path(self, path):
-        return FileEntry._from_path(path, self._root)
+        return FileEntry.from_path(path, self._root)
 
     @classmethod
     def from_path(cls, path, root=NO_ROOT):
@@ -137,7 +136,7 @@ class FileEntry(os.PathLike):
         if isinstance(name, os.PathLike):
             name = name.__fspath__()
 
-        joined = self._copy_with_path(os.path.join(self._path, name))
+        joined = self._copy_with_path(os.path.join(self._resource.path, name))
 
         if (
             name != os.curdir and
@@ -174,7 +173,7 @@ class FileEntry(os.PathLike):
         else:
             return NotImplemented
 
-        return self._copy_with_path(os.path.join(base, self._path))
+        return self._copy_with_path(os.path.join(base, self._resource.path))
 
     @property
     def basename(self):
@@ -227,7 +226,7 @@ class FileEntry(os.PathLike):
     @property
     def uid(self):
         inode = self._resource.inode()
-        dev = self._resource.stat().st_dev
+        dev = self._resource.stat(follow_symlinks=False).st_dev
 
         # quirk: per documentation, on windows, the stat returned from os.DirEntry.stat() has 
         # st_ino and st_dev set to 0

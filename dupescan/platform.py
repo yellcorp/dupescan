@@ -1,7 +1,8 @@
 __all__ = (
-    "DEFAULT_BUFFER_SIZE",
+    "MIN_BUFFER_SIZE",
+    "DEFAULT_MAX_BUFFER_SIZE",
+    "DEFAULT_MAX_MEMORY",
     "decide_max_open_files",
-    "dev_and_inode",
 )
 
 
