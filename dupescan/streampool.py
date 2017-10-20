@@ -69,10 +69,12 @@ class StreamPool(object):
         return stream
 
     def _notify_will_open(self, stream):
-        if len(self._open_instances) == self.max_open_files:
-            for old_stream in self._open_instances.values():
+        excess = len(self._open_instances) - self.max_open_files
+        
+        if excess >= 0:
+            for _, old_stream in zip(range(excess + 1), self._open_instances.values()):
                 old_stream.suspend()
-                break
+
         self._open_instances[stream._inst_id] = stream
 
     def _notify_did_close(self, stream):

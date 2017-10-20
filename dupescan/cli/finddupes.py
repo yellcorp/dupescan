@@ -175,7 +175,8 @@ def run(argv=None):
         config.prefer = args.prefer
         config.verbose = args.verbose
         config.progress = args.progress
-        config.buffer_size = args.buffer_size
+        config.max_memory = args.max_memory
+        config.max_buffer_size = args.max_buffer_size
         config.log_time = args.time
 
         scan(args.paths, config)
@@ -223,9 +224,14 @@ class ScanConfig(object):
 
         progress (bool): If True, print progress bars to stderr.
 
-        buffer_size (int): Number of bytes to read at a time when comparing
-            files by content.  If 0, the default of
-            platform.DEFAULT_BUFFER_SIZE is used.
+        max_memory (int): Adjust buffer size and maximum number of open files so
+            as not to exceed this many bytes.  This will be exceeded if set
+            below platform.MIN_BUFFER_SIZE.  If 0, the default of
+            platform.DEFAULT_MAX_MEMORY is used.
+
+        max_buffer_size (int): Absolute maximum buffer size.  This will always
+            be imposed even if max_memory allows a bigger buffer size.  If 0,
+            the default of platform.DEFAULT_MAX_BUFFER_SIZE is used.
 
         log_time (bool): If True, record the amount of time taken and append it
             to the report.
@@ -238,7 +244,8 @@ class ScanConfig(object):
         self.prefer = None
         self.verbose = False
         self.progress = False
-        self.buffer_size = 0
+        self.max_buffer_size = 0
+        self.max_memory = 0
         self.log_time = False
 
 
@@ -264,7 +271,8 @@ def scan(paths, config=None):
     reporter = create_reporter(config.prefer)
 
     find_dupes = core.DuplicateFinder(
-        buffer_size = config.buffer_size,
+        max_memory = config.max_memory,
+        max_buffer_size = config.max_buffer_size,
         cancel_func = cancel_if_single_root if config.only_mixed_roots else None,
         logger = logger,
         progress_handler = ProgressHandler(stream=sys.stderr) if config.progress else None,

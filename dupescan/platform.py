@@ -5,10 +5,13 @@ __all__ = (
 )
 
 
-DEFAULT_BUFFER_SIZE = 4096
+MIN_BUFFER_SIZE = 4096
+DEFAULT_MAX_BUFFER_SIZE = 1024 ** 2 # 1mb. on my machine this seems to be the sweet spot
+DEFAULT_MAX_MEMORY = 256 * (1024 ** 2) # 256mb
+
 
 ABSOLUTE_MAX_OPEN_FILES = 32768
-FALLBACK_MAX_OPEN_FILES = 64
+FALLBACK_MAX_OPEN_FILES = 1024
 def decide_max_open_files():
     try:
         import resource

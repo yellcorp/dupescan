@@ -161,7 +161,8 @@ def generate_report(root1, root2, config):
     )
 
     dupe_finder = core.DuplicateFinder(
-        buffer_size = config.buffer_size,
+        max_memory = config.max_memory,
+        max_buffer_size = config.max_buffer_size,
         logger = logger,
     )
 

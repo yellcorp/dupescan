@@ -1,5 +1,6 @@
 import atexit
 import collections
+import math
 import os
 import sqlite3
 import sys
@@ -23,6 +24,12 @@ def noop(*args, **kwargs):
     pass
 
 
+def nearest_pow2(n):
+    if n < 1:
+        return 1
+    return 2 ** int(math.log(n, 2) + 0.5)
+
+
 PROGRESS_CALLBACK_FREQUENCY = 0x100000
 class DuplicateFinder(object):
     """Main class for detecting files with duplicate content in a set.
@@ -35,7 +42,8 @@ class DuplicateFinder(object):
     def __init__(
         self,
         max_open_files = None,
-        buffer_size = None,
+        max_memory = None,
+        max_buffer_size = None,
         cancel_func = None,
         logger = None,
         progress_handler = None,
@@ -49,8 +57,11 @@ class DuplicateFinder(object):
                 potential set contains more files than this number, older
                 filehandles will be closed before newer ones are opened.
 
-            buffer_size (int or None): Sets the buffer size used when reading
-                from and comparing potentially duplicate files.
+            max_memory (int or None): Sets the maximum amount of memory (in
+                bytes) to use when comparing files.
+
+            max_buffer_size (int or None): Sets the maximum buffer size when
+                comparing files.
 
             cancel_func (func or None): A function that can cancel a file
                 comparison operation by returning True. It takes a single
@@ -87,10 +98,15 @@ class DuplicateFinder(object):
         else:
             self._max_open_files = platform.decide_max_open_files()
 
-        if buffer_size is not None and buffer_size >= 1:
-            self._buffer_size = buffer_size
+        if max_memory is not None and max_memory >= 1:
+            self._max_memory = max_memory
         else:
-            self._buffer_size = platform.DEFAULT_BUFFER_SIZE
+            self._max_memory = platform.DEFAULT_MAX_MEMORY
+
+        if max_buffer_size is not None and max_buffer_size >= 1:
+            self._max_buffer_size = max_buffer_size
+        else:
+            self._max_buffer_size = platform.DEFAULT_MAX_BUFFER_SIZE
 
         self._cancel_func = cancel_func
 
@@ -155,7 +171,7 @@ class DuplicateFinder(object):
         stats = dict(bytes_read=0, completed=0, early_out=0, canceled=0)
         last_progress = 0
 
-        pool = streampool.StreamPool(self._max_open_files)
+        pool = streampool.StreamPool(self._max_open_files) # 8 is arbitrary, gets changed later
 
         initial_set = [
             InstanceStreamPair(instance, pool.open(instance.entry.path))
@@ -166,6 +182,7 @@ class DuplicateFinder(object):
         current_sets = [ initial_set ]
         self._do_progress_callback(current_sets, 0, file_size)
 
+        first = True
         while len(current_sets) > 0:
             compare_set = current_sets.pop()
             assert len(compare_set) > 0, "len(compare_set) <= 0"
@@ -201,10 +218,31 @@ class DuplicateFinder(object):
 
             else:
                 # otherwise do it properly and don't skip bits
+
+                if first:
+                    buffer_size = platform.MIN_BUFFER_SIZE
+                    first = False
+                else:
+                    buffer_size = max(
+                        platform.MIN_BUFFER_SIZE,
+                        min(
+                            self._max_buffer_size,
+                            nearest_pow2(self._max_memory / len(compare_set))
+                        )
+                    )
+
+                pool.max_open_files = max(
+                    1,
+                    min(
+                        self._max_open_files,
+                        int(self._max_memory / buffer_size)
+                    )
+                )
+
                 for cs_pair in compare_set:
                     stream = cs_pair.stream
                     try:
-                        buffer = stream.read(self._buffer_size)
+                        buffer = stream.read(buffer_size)
                         stats["bytes_read"] += len(buffer)
 
                     except EnvironmentError as read_error:
