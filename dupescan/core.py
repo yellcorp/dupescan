@@ -375,12 +375,14 @@ def fetch_iterator(sqlite_cursor):
             break
 
 
+DB_COMMIT_FREQ = 0x4000
 class DatabaseIndexer(object):
     def __init__(self):
         self._dir = tempfile.mkdtemp()
         self._path = os.path.join(self._dir, "dupescanindex")
         atexit.register(self.dispose)
 
+        self._counter = 0 
         self._conn = sqlite3.connect(self._path)
 
         cursor = self._conn.cursor()
@@ -442,8 +444,13 @@ class DatabaseIndexer(object):
         cursor.execute("""\
             insert into files values (?,?,?)
         """, (entry.size, entry.path, entry.root.index))
+        
+        self._counter += 1
+        if self._counter >= DB_COMMIT_FREQ:
+            self.end()
 
     def end(self):
+        self._counter = 0
         self._conn.commit()
 
     def sets(self):
