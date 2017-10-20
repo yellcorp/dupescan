@@ -270,12 +270,24 @@ def scan(paths, config=None):
     entries = create_file_iterator(paths, logger, config.recurse, config.min_file_size, config.include_symlinks)
     reporter = create_reporter(config.prefer)
 
+    if config.progress:
+        try:
+            use_unicode = sys.stderr.encoding in ("utf_8",)
+        except AttributeError:
+            use_unicode = False
+        progress_handler = ProgressHandler(
+            glyphs = use_unicode,
+            stream = sys.stderr,
+        )
+    else:
+        progress_handler = None
+
     find_dupes = core.DuplicateFinder(
         max_memory = config.max_memory,
         max_buffer_size = config.max_buffer_size,
         cancel_func = cancel_if_single_root if config.only_mixed_roots else None,
         logger = logger,
-        progress_handler = ProgressHandler(stream=sys.stderr) if config.progress else None,
+        progress_handler = progress_handler,
     )
 
     start_time = time.time() if config.log_time else 0
@@ -326,9 +338,22 @@ def cancel_if_single_root(dupe_set):
     return True
 
 
-VISUAL_SET_COUNT = "\u2800\u2840\u28C0\u28C4\u28E4\u28E6\u28F6\u28F7\u28FF"
+GLYPHS = {
+    "ascii": ("#-", ""),
+    "unicode": (
+        "\u2588\u2591",
+        "\u2800\u2840\u28C0\u28C4\u28E4\u28E6\u28F6\u28F7\u28FF"
+    )
+}
 class ProgressHandler(object):
-    def __init__(self, stream=None, line_width=78):
+    def __init__(self, glyphs=True, stream=None, line_width=78):
+        if glyphs is True:
+            glyphs = GLYPHS["unicode"]
+        elif glyphs is False:
+            glyphs = GLYPHS["ascii"]
+
+        self._progress_glyphs, self._count_glyphs = glyphs
+
         self._line_width = line_width
         self._stream = stream if stream is not None else sys.stderr
         self._last_len = 0
@@ -337,10 +362,10 @@ class ProgressHandler(object):
         set_vis_list = [ ]
         for s in sets:
             set_len = len(s)
-            if set_len >= len(VISUAL_SET_COUNT):
+            if set_len >= len(self._count_glyphs):
                 set_vis_list.append(str(set_len))
             else:
-                set_vis_list.append(VISUAL_SET_COUNT[set_len])
+                set_vis_list.append(self._count_glyphs[set_len])
 
         set_vis = "[%s]" % "|".join(set_vis_list)
         read_size = units.format_byte_count(file_size, 0)
@@ -349,8 +374,8 @@ class ProgressHandler(object):
         if progress_room >= 2:
             progress_chars = int(progress_room * file_pos / file_size + 0.5)
             bar = "".join((
-                "\u2588" * progress_chars,
-                "\u2591" * (progress_room - progress_chars),
+                self._progress_glyphs[0] * progress_chars,
+                self._progress_glyphs[1] * (progress_room - progress_chars),
             ))
             line = " ".join((set_vis, bar, read_size))
         else:
