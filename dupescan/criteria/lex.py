@@ -27,10 +27,11 @@ class Lexer(object):
             if ch == ",":
                 self.pos += 1
                 return self._token(Token.Type.comma, None)
-            elif ch in "'\"":
+
+            if ch in "'\"":
                 return self._quoted_string()
-            else:
-                return self._bare_string()
+
+            return self._bare_string()
         return Token(Token.Type.end, None, "", self.pos)
 
     def _token(self, token_type, value):

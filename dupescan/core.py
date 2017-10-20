@@ -173,7 +173,7 @@ class DuplicateFinder(object):
         stats = dict(bytes_read=0, completed=0, early_out=0, canceled=0)
         last_progress = 0
 
-        pool = streampool.StreamPool(self._max_open_files) # 8 is arbitrary, gets changed later
+        pool = streampool.StreamPool(self._max_open_files)
 
         initial_set = [
             InstanceStreamPair(instance, pool.open(instance.entry.path))

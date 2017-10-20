@@ -59,7 +59,7 @@ class Logger(object):
 
 
 class NullLogger(Logger):
-    def log(self, level, template, *targs, **tkwargs):
+    def log(self, level, message, *message_args, **message_kwargs):
         pass
 
 
@@ -70,9 +70,9 @@ class StreamLogger(Logger):
         self.min_level = min_level
         self.max_level = max_level
 
-    def log(self, level, template, *targs, **tkwargs):
+    def log(self, level, message, *message_args, **message_kwargs):
         if level >= self.min_level and (self.max_level is None or level < self.max_level):
             print(
-                self._format(template, targs, tkwargs),
+                self._format(message, message_args, message_kwargs),
                 file = self._stream
             )
