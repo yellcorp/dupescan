@@ -164,6 +164,8 @@ class DuplicateFinder(object):
             "End file enumeration. files={files}, errors={errors}",
             **stats
         )
+        
+        indexer.end()
 
         return indexer.sets()
 
@@ -380,28 +382,38 @@ class DatabaseIndexer(object):
         atexit.register(self.dispose)
 
         self._conn = sqlite3.connect(self._path)
-        self._insertq = [ ]
 
-        self._cursor = self._conn.cursor()
-        self._cursor.execute("""\
-            create table files
-            (size integer, path text, root text, rootn integer)
-        """)
-        self._cursor.execute("""\
-            create index sizeindex on files (size)
-        """)
-        self._cursor.execute("""\
-            create unique index pathindex on files (path)
+        cursor = self._conn.cursor()
+
+        cursor.execute("""\
+            create table files (
+                size integer,
+                path text unique on conflict ignore,
+                rootn integer
+            )
         """)
 
+        cursor.execute("""\
+            create index size_index on files (size)
+        """)
+
+        cursor.execute("""\
+            create unique index path_index on files (path)
+        """)
+
+        cursor.execute("""\
+            create table roots (
+                rootn integer primary key on conflict ignore,
+                path text
+            )
+        """)
+
+        cursor.close()
         self._conn.commit()
 
     def dispose(self):
         if self._path is None:
             return
-
-        self._cursor.close()
-        self._cursor = None
 
         self._conn.commit()
         self._conn.close()
@@ -419,41 +431,20 @@ class DatabaseIndexer(object):
     def __del__(self):
         self.dispose()
 
-    @staticmethod
-    def _to_db(entry):
-        return (
-            entry.size,
-            entry.path,
-            entry.root.path or "",
-            entry.root.index if entry.root.index is not None else -1
-        )
-    
-    @staticmethod
-    def _from_db(row):
-        _, path, root_path, root_index = row
-        
-        if root_index == -1:
-            root = None
-        else:
-            root = fs.Root(root_path, root_index)
-        return fs.FileEntry.from_path(path, root)
-
     def add(self, entry):
-        self._insertq.append(DatabaseIndexer._to_db(entry))
+        cursor = self._conn.cursor()
+        
+        if entry.root.index is not None:
+            cursor.execute("""\
+                insert into roots values (?,?)
+            """, (entry.root.index, entry.root.path))
 
-        if len(self._insertq) > 1024:
-            self._flush_insert()
+        cursor.execute("""\
+            insert into files values (?,?,?)
+        """, (entry.size, entry.path, entry.root.index))
 
     def end(self):
-        self._flush_insert()
-
-    def _flush_insert(self):
-        if len(self._insertq) > 0:
-            self._cursor.executemany("""\
-                insert or ignore into files values (?,?,?,?)
-            """, self._insertq)
-            self._conn.commit()
-            self._insertq.clear()
+        self._conn.commit()
 
     def sets(self):
         self.end()
@@ -468,16 +459,24 @@ class DatabaseIndexer(object):
         for size, _count in fetch_iterator(unique_cursor):
             set_cursor = self._conn.cursor()
             set_cursor.execute("""\
-                select size, path, root, rootn from files
-                where size = ?
+                select
+                    files.path,
+                    files.rootn,
+                    roots.path
+                from files left join roots using (rootn)
+                where files.size = ?
             """, (size,))
 
             entries = [
-                DatabaseIndexer._from_db(row)
-                for row in set_cursor.fetchall()
+                fs.FileEntry.from_path(path, fs.Root(root_path, root_index))
+                for (path, root_index, root_path) in set_cursor.fetchall()
             ]
+
             set_cursor.close()
+
             yield size, list(fs.FileInstance.group_entries_by_identifier(entries))
+
+        unique_cursor.close()
 
 
 InstanceStreamPair = collections.namedtuple(
