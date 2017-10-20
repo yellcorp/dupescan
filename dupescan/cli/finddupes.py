@@ -4,6 +4,7 @@ import sys
 import time
 
 from dupescan import (
+    console,
     core,
     criteria,
     fs,
@@ -275,19 +276,24 @@ def scan(paths, config=None):
             use_unicode = sys.stderr.encoding in ("utf_8",)
         except AttributeError:
             use_unicode = False
-        progress_handler = ProgressHandler(
+
+        compare_progress_handler = CompareProgressHandler(
             glyphs = use_unicode,
             stream = sys.stderr,
         )
+        
+        walk_progress_handler = WalkProgressHandler(stream=sys.stderr)
     else:
-        progress_handler = None
+        walk_progress_handler = None
+        compare_progress_handler = None
 
     find_dupes = core.DuplicateFinder(
         max_memory = config.max_memory,
         max_buffer_size = config.max_buffer_size,
         cancel_func = cancel_if_single_root if config.only_mixed_roots else None,
         logger = logger,
-        progress_handler = progress_handler,
+        compare_progress_handler = compare_progress_handler,
+        walk_progress_handler = walk_progress_handler,
     )
 
     start_time = time.time() if config.log_time else 0
@@ -338,6 +344,21 @@ def cancel_if_single_root(dupe_set):
     return True
 
 
+class WalkProgressHandler(object):
+    def __init__(self, stream=None, line_width=78):
+        self._status_line = console.StatusLine(
+            stream = stream if stream is not None else sys.stderr,
+            line_width = line_width,
+            elide_string = ".."
+        )
+
+    def progress(self, path):
+        self._status_line.set_text(path)
+
+    def complete(self):
+        self._status_line.clear()
+
+
 GLYPHS = {
     "ascii": ("#-", ""),
     "unicode": (
@@ -345,18 +366,19 @@ GLYPHS = {
         "\u2800\u2840\u28C0\u28C4\u28E4\u28E6\u28F6\u28F7\u28FF"
     )
 }
-class ProgressHandler(object):
+class CompareProgressHandler(object):
     def __init__(self, glyphs=True, stream=None, line_width=78):
+        self._status_line = console.StatusLine(
+            stream = stream if stream is not None else sys.stderr,
+            line_width = line_width
+        )
+
         if glyphs is True:
             glyphs = GLYPHS["unicode"]
         elif glyphs is False:
             glyphs = GLYPHS["ascii"]
 
         self._progress_glyphs, self._count_glyphs = glyphs
-
-        self._line_width = line_width
-        self._stream = stream if stream is not None else sys.stderr
-        self._last_len = 0
 
     def progress(self, sets, file_pos, file_size):
         set_vis_list = [ ]
@@ -369,7 +391,7 @@ class ProgressHandler(object):
 
         set_vis = "[%s]" % "|".join(set_vis_list)
         read_size = units.format_byte_count(file_size, 0)
-        progress_room = self._line_width - (len(set_vis) + len(read_size)) - 2
+        progress_room = self._status_line.line_width - (len(set_vis) + len(read_size)) - 2
 
         if progress_room >= 2:
             progress_chars = int(progress_room * file_pos / file_size + 0.5)
@@ -381,23 +403,10 @@ class ProgressHandler(object):
         else:
             line = " ".join((set_vis, read_size))
 
-        self.set_text(line)
+        self._status_line.set_text(line)
 
     def clear(self):
-        self.set_text("")
-        self.set_text("")
-
-    def set_text(self, text):
-        effective_text, _, _ = text.partition("\n")
-        effective_text = effective_text.replace("\t", "    ")
-        effective_text = text[:self._line_width]
-
-        this_len = len(effective_text)
-        self._stream.write("\r%s" % effective_text)
-        if this_len < self._last_len:
-            self._stream.write(" " * (self._last_len - this_len))
-        self._stream.flush()
-        self._last_len = this_len
+        self._status_line.clear()
 
 
 def create_reporter(prefer=None):

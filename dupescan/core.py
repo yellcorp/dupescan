@@ -30,7 +30,12 @@ def nearest_pow2(n):
     return 2 ** int(math.log(n, 2) + 0.5)
 
 
-PROGRESS_CALLBACK_FREQUENCY = 0x100000
+# invoke walk callback after enumerating this many files
+WALK_CALLBACK_FREQUENCY = 2000
+
+# invoke compare callback after reading this many bytes from the filesystem
+COMPARE_CALLBACK_FREQUENCY = 0x100000
+
 class DuplicateFinder(object):
     """Main class for detecting files with duplicate content in a set.
 
@@ -46,7 +51,8 @@ class DuplicateFinder(object):
         max_buffer_size = None,
         cancel_func = None,
         logger = None,
-        progress_handler = None,
+        compare_progress_handler = None,
+        walk_progress_handler = None,
         on_error = None, # TODO: name this consistently
     ):
         """Construct a new DuplicateFinder.
@@ -73,16 +79,25 @@ class DuplicateFinder(object):
             logger (log.Logger or None): A logger object used to print debug
                 information.
 
-            progress_handler (ProgressHandler or None): A ProgressHandler for
-                reporting progress. A ProgressHandler is an object that has two
-                methods: `progress(sets, bytes_read, bytes_total)` and
-                `clear()`. `progress` will be called periodically during file
-                reads. `sets` will be a list of DuplicateInstanceSet objects,
+            compare_progress_handler (CompareProgressHandler or None): A
+                CompareProgressHandler for reporting content compare progress.
+                A CompareProgressHandler is an object that has two methods:
+                `progress(sets, bytes_read, bytes_total)` and `clear()`.
+                `progress` will be called periodically during file reads.
+                `sets` will be a list of DuplicateInstanceSet objects,
                 reflecting the current state of the compare operation.
                 `bytes_read` is the number of bytes read from a single
                 representative file, and `bytes_total` is the file size.
                 `clear` will be called immediately before any event that may
                 cause other output to be printed.
+
+            walk_progress_handler (WalkProgressHandler or None): A
+                WalkProgressHandler for reporting file enumeration progress. A
+                WalkProgressHandler has two methods: `progress(path)` and
+                `complete()`. `progress` will be called periodically during
+                enumeration of the filesystem. `path` will be a string
+                representing the last path to be sen. `complete` will be called
+                when enumeration is complete.
 
             on_error (func or None): A function accepting 2 arguments:
                 `error` and `path`, called whenever an error is encountered.
@@ -115,10 +130,15 @@ class DuplicateFinder(object):
         else:
             self._logger = log.NullLogger()
 
-        if progress_handler is not None:
-            self._progress_handler = progress_handler
+        if compare_progress_handler is not None:
+            self._compare_progress_handler = compare_progress_handler
         else:
-            self._progress_handler = NullProgressHandler()
+            self._compare_progress_handler = NullCompareProgressHandler()
+
+        if walk_progress_handler is not None:
+            self._walk_progress_handler = walk_progress_handler
+        else:
+            self._walk_progress_handler = NullWalkProgressHandler()
 
         if on_error is not None:
             self._on_error = on_error
@@ -147,12 +167,17 @@ class DuplicateFinder(object):
 
     def _collect_size_sets(self, entries):
         stats = dict(files=0, errors=0)
+        last_files_callback = -WALK_CALLBACK_FREQUENCY
 
         indexer = DatabaseIndexer()
 
         self._logger.debug("Start file enumeration")
         for entry in entries:
             stats["files"] += 1
+            if stats["files"] - last_files_callback >= WALK_CALLBACK_FREQUENCY:
+                self._walk_progress_handler.progress(entry.path)
+                last_files_callback = stats["files"]
+
             try:
                 indexer.add(entry)
             except EnvironmentError as environment_error:
@@ -160,11 +185,12 @@ class DuplicateFinder(object):
                 self._log_error(environment_error, entry.path)
                 self._on_error(environment_error, entry.path)
 
+        self._walk_progress_handler.complete()
         self._logger.debug(
             "End file enumeration. files={files}, errors={errors}",
             **stats
         )
-        
+
         indexer.end()
 
         return indexer.sets()
@@ -182,7 +208,7 @@ class DuplicateFinder(object):
         file_size = initial_set[0].instance.entry.size
 
         current_sets = [ initial_set ]
-        self._do_progress_callback(current_sets, 0, file_size)
+        self._do_compare_progress_callback(current_sets, 0, file_size)
 
         first = True
         while len(current_sets) > 0:
@@ -257,9 +283,9 @@ class DuplicateFinder(object):
                             self._on_error(close_error, stream.instance.entry.path)
                         continue
 
-                    if stats["bytes_read"] - last_progress > PROGRESS_CALLBACK_FREQUENCY:
+                    if stats["bytes_read"] - last_progress > COMPARE_CALLBACK_FREQUENCY:
                         last_progress = stats["bytes_read"]
-                        self._do_progress_callback([ compare_set ] + current_sets, stream.tell(), file_size)
+                        self._do_compare_progress_callback([ compare_set ] + current_sets, stream.tell(), file_size)
 
                     try:
                         next_set = next_sets[buffers.index(buffer)]
@@ -288,7 +314,7 @@ class DuplicateFinder(object):
                 )
 
                 if of_interest:
-                    self._progress_handler.clear()
+                    self._compare_progress_handler.clear()
                     yield DuplicateInstanceSet._from_is_pairs(compare_set)
 
                 if close_set:
@@ -298,16 +324,16 @@ class DuplicateFinder(object):
                 else:
                     current_sets.append(compare_set)
 
-        self._do_progress_callback(current_sets, file_size, file_size)
-        self._progress_handler.clear()
+        self._do_compare_progress_callback(current_sets, file_size, file_size)
+        self._compare_progress_handler.clear()
 
         self._logger.debug(
             "Content comparison end: bytes_read={bytes_read} completed={completed} early_out={early_out} canceled={canceled}",
             **stats,
         )
 
-    def _do_progress_callback(self, cs_sets, file_pos, file_size):
-        self._progress_handler.progress(
+    def _do_compare_progress_callback(self, cs_sets, file_pos, file_size):
+        self._compare_progress_handler.progress(
             [
                 DuplicateInstanceSet._from_is_pairs(cs)
                 for cs in cs_sets
@@ -357,11 +383,19 @@ class DuplicateInstanceSet(tuple):
         return cls(is_pair.instance for is_pair in is_iter)
 
 
-class NullProgressHandler(object):
+class NullCompareProgressHandler(object):
     def progress(self, _sets, _file_pos, _file_size):
         pass
 
     def clear(self):
+        pass
+
+
+class NullWalkProgressHandler(object):
+    def progress(self, _path):
+        pass
+
+    def complete(self):
         pass
 
 
