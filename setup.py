@@ -29,6 +29,7 @@ setup(
         "dupescan",
         "dupescan.cli",
         "dupescan.criteria",
+        "dupescan.fs",
     ],
     package_data={
         "dupescan.cli": [ "preferhelp" ]
