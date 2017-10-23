@@ -512,19 +512,18 @@ def execute_report(report_path, dry_run, verbose):
                     if entry in marked_entries:
                         continue
                     
-                    if dry_run or verbose:
+                    if verbose:
                         print(entry.path, end="")
 
-                    if dry_run:
-                        print()
-                    else:
-                        try:
+                    try:
+                        if not dry_run:
                             os.remove(entry.path)
+                        if verbose:
                             print()
-                        except EnvironmentError as env_error:
-                            if not verbose:
-                                print(entry.path, end="")
-                            print(": %s" % env_error)
-                            errors = True
+                    except EnvironmentError as env_error:
+                        if not verbose:
+                            print(entry.path, end="")
+                        print(": %s" % env_error)
+                        errors = True
 
     return 2 if errors else 0
