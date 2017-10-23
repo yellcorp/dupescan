@@ -119,7 +119,8 @@ def run(argv=None):
     config.summary = not args.no_summary
     config.verbose = args.verbose
     config.file = sys.stdout
-    config.buffer_size = args.buffer_size
+    config.max_buffer_size = args.max_buffer_size
+    config.max_memory = args.max_memory
 
     generate_report(*args.dirs, config)
 
@@ -139,7 +140,8 @@ class CorrelateConfig(object):
         self.summary = True
         self.verbose = False
         self.file = sys.stdout
-        self.buffer_size = None
+        self.max_buffer_size = 0
+        self.max_memory = 0
 
 
 def generate_report(root1, root2, config):
@@ -193,14 +195,17 @@ def generate_report(root1, root2, config):
 
 
 def correlate(dupe_finder, root1, root2):
-    all_entries = set()
+    all_entries = dict()
     ignore_symlinks = lambda e: not e.is_symlink
+    
+    def record(entry):
+        all_entries[entry.path] = entry
 
     entries = tap_iterator(
-        all_entries.add,
+        record,
         fs.recurse_iterator(
             (root1, root2),
-            ignore_symlinks,
+            None,
             ignore_symlinks
         )
     )
@@ -210,7 +215,7 @@ def correlate(dupe_finder, root1, root2):
         for instance in dupe_set:
             for entry in instance.entries:
                 partitions[entry.root.index].append(entry)
-                all_entries.remove(instance.entry)
+                del all_entries[entry.path]
 
         for a, b in itertools.zip_longest(*partitions):
             assert not (a is None and b is None), "got (None, None) from zip_longest"
@@ -224,7 +229,7 @@ def correlate(dupe_finder, root1, root2):
 
             yield action, a, b
 
-    for entry in all_entries:
+    for entry in all_entries.values():
         assert entry.root.index in (0, 1), "bad root.index while iterating unmatched entries"
         if entry.root.index == 0:
             yield Action.removed, entry, None
