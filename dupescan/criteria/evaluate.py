@@ -31,11 +31,11 @@ class SelectionRules(object):
 
 def build_property_graph(graph):
     for token_sequences, func in (
-        (["path"],                        lambda p: p.path),
-        (["name"],                        lambda p: p.basename),
-        (["dir/ectory"],                  lambda p: p.parent.path),
-        (["dir/ectory name"],             lambda p: p.parent.path.basename),
-        (["ext/ension"],                  lambda p: p.extension),
+        (["path"],                        lambda p: p),
+        (["name"],                        os.path.basename),
+        (["dir/ectory"],                  os.path.dirname),
+        (["dir/ectory name"],             lambda p: os.path.basename(os.path.dirname(p))),
+        (["ext/ension"],                  lambda p: os.path.splitext(p)[1]),
         (["mtime", "modification time?"], lambda p: p.mtime),
         (["index"],                       lambda p: p.root.index + 1),
     ):
