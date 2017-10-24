@@ -31,13 +31,13 @@ class SelectionRules(object):
 
 def build_property_graph(graph):
     for token_sequences, func in (
-        (["path"],                        lambda p: p),
-        (["name"],                        os.path.basename),
-        (["dir/ectory"],                  os.path.dirname),
-        (["dir/ectory name"],             lambda p: os.path.basename(os.path.dirname(p))),
-        (["ext/ension"],                  lambda p: os.path.splitext(p)[1]),
-        (["mtime", "modification time?"], lambda p: p.mtime),
-        (["index"],                       lambda p: p.root.index + 1),
+        (["path"],                        lambda e: e.path),
+        (["name"],                        lambda e: e.basename),
+        (["dir/ectory"],                  lambda e: e.dirname),
+        (["dir/ectory name"],             lambda e: e.parent.basename),
+        (["ext/ension"],                  lambda e: e.extension),
+        (["mtime", "modification time?"], lambda e: e.mtime),
+        (["index"],                       lambda e: e.root.index + 1),
     ):
         prop = EntryProperty(token_sequences, func)
         graph.add(prop.token_sequences, prop)
