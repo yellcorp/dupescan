@@ -156,7 +156,7 @@ def run(argv=None):
     if args.execute is None:
         config = ScanConfig()
         if args.zero:
-            if args.min_size > 0:
+            if args.min_size is not None and args.min_size > 0:
                 print("Conflicting arguments: --zero implies --min-size 0, but --min-size was also specified.")
                 return 1
             config.min_file_size = 0
