@@ -394,7 +394,11 @@ class CompareProgressHandler(object):
         progress_room = self._status_line.line_width - (len(set_vis) + len(read_size)) - 2
 
         if progress_room >= 2:
-            progress_chars = int(progress_room * file_pos / file_size + 0.5)
+            if file_size > 0:
+                progress_chars = int(progress_room * file_pos / file_size + 0.5)
+            else:
+                progress_chars = progress_room
+
             bar = "".join((
                 self._progress_glyphs[0] * progress_chars,
                 self._progress_glyphs[1] * (progress_room - progress_chars),
