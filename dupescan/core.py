@@ -269,18 +269,20 @@ class DuplicateFinder(object):
 
                 for cs_pair in compare_set:
                     stream = cs_pair.stream
+                    instance = cs_pair.instance
+
                     try:
                         buffer = stream.read(buffer_size)
                         stats["bytes_read"] += len(buffer)
 
                     except EnvironmentError as read_error:
-                        self._log_error(read_error, stream.instance.entry.path)
-                        self._on_error(read_error, stream.instance.entry.path)
+                        self._log_error(read_error, instance.entry.path)
+                        self._on_error(read_error, instance.entry.path)
                         try:
                             stream.close()
                         except EnvironmentError as close_error:
-                            self._log_error(close_error, stream.instance.entry.path)
-                            self._on_error(close_error, stream.instance.entry.path)
+                            self._log_error(close_error, instance.entry.path)
+                            self._on_error(close_error, instance.entry.path)
                         continue
 
                     if stats["bytes_read"] - last_progress > COMPARE_CALLBACK_FREQUENCY:
