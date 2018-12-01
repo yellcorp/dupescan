@@ -81,6 +81,11 @@ def get_arg_parser():
                 duplicates can be deleted by passing the generated report to
                 the -x/--execute option."""
     )
+    
+    #p.add_argument("-i", "--ignore",
+    #    metavar="NAME",
+    #    help="""Ignore files or directories matching NAME""" ...todo
+    #)
 
     p.add_argument("--time",
         action="store_true",
