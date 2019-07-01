@@ -18,10 +18,10 @@ finddupes
 ~~~~~~~~~
 
 
-usage: finddupes [-h] [-s] [-z] [-a] [-r] [-o] [-m SIZE] [-p CRITERIA]
-                 [--time] [--help-prefer] [-v] [-x PATH] [-n]
-                 [--buffer-size SIZE] [--version]
-                 PATH [PATH ...]
+usage: finddupes [-h] [-s] [-z] [-r] [-o] [-m SIZE] [-p CRITERIA] [--time]
+                 [--help-prefer] [-v] [--progress] [-x PATH] [-c PATH] [-n]
+                 [--max-memory SIZE] [--max-buffer-size SIZE] [--version]
+                 [PATH [PATH ...]]
 
 Find files with identical content.
 
@@ -35,13 +35,6 @@ optional arguments:
   -z, --zero            Include zero-length files. All zero-length files are
                         considered to have identical content. This option is
                         equivalent to --min-size 0
-  -a, --aliases         Check whether a single file has more than one name,
-                        which is possible through hardlinks, as well as
-                        symlinks if the -s/--symlinks option is specified.
-                        This check is used to skip redundant content
-                        comparisons, add extra information to reports, and
-                        preserve all paths pointing to a selected file when
-                        the -p/--prefer option is used.
   -r, --recurse         Recurse into subdirectories.
   -o, --only-mixed-roots
                         Only show duplicate files if they arise from recursing
@@ -61,19 +54,28 @@ optional arguments:
                         For each set of duplicate files, automatically select
                         one for preservation according to the provided
                         criteria. Other duplicates can be deleted by passing
-                        the generated report to the -x/--execute option.
+                        the generated report to the -x/--delete option.
   --time                Add elasped time to the generated report.
   --help-prefer         Display detailed help on using the --prefer option
   -v, --verbose         Log detailed information to STDERR.
-  -x PATH, --execute PATH
+  --progress            Show progress bars on STDERR.
+  -x PATH, --delete PATH
                         Delete unmarked files in the report at PATH. Sets
                         where no files are marked will be skipped.
-  -n, --dry-run         Used in combination with -x/--execute. List actions
-                        that --execute would perform without actually doing
+  -c PATH, --coalesce PATH
+                        Replace duplicate files with hard links, using sets
+                        found in the report at PATH. File marks are ignored -
+                        all filenames are preserved.
+  -n, --dry-run         Used in combination with -x/--delete. List actions
+                        that --delete would perform without actually doing
                         them.
-  --buffer-size SIZE    Specifies the size of each buffer used when comparing
-                        files by content. This option accepts a byte count.
-                        The default is 4096.
+  --max-memory SIZE     Specifies the maximum amount of memory to use when
+                        comparing a set of potentially duplicate files. This
+                        option accepts a byte count. The default is 268435456.
+  --max-buffer-size SIZE
+                        Specifies the maximum size of buffers used when
+                        comparing a set of potentially duplicate files. This
+                        option accepts a byte count. The default is 1048576.
   --version             show program's version number and exit
 
 Arguments that accept byte counts accept an integer with an optional suffix
@@ -269,31 +271,35 @@ correlate
 ~~~~~~~~~
 
 usage: correlate [-h] [-v] [-m] [-r] [-a] [-c] [--no-colorize] [--no-summary]
-                 [--buffer-size SIZE] [--version]
+                 [--max-memory SIZE] [--max-buffer-size SIZE] [--version]
                  DIR DIR
 
 Compare two directories by content.
 
 positional arguments:
-  DIR                 Paths to the directories to be compared.
+  DIR                   Paths to the directories to be compared.
 
 optional arguments:
-  -h, --help          show this help message and exit
-  -v, --verbose       Log detailed information to STDERR.
-  -m, --matches       List files that appear in both directories.
-  -r, --removes       List files that appear only as a descendant of the first
-                      directory.
-  -a, --adds          List files that appear only as a descendant of the
-                      second directory.
-  -c, --colorize      Colorize output.
-  --no-colorize       Force colorizing off. If neither --colorize or --no-
-                      colorize is specified, it will be enabled if a
-                      compatible terminal is detected.
-  --no-summary        Suppress the summary.
-  --buffer-size SIZE  Specifies the size of each buffer used when comparing
-                      files by content. This option accepts a byte count. The
-                      default is 4096.
-  --version           show program's version number and exit
+  -h, --help            show this help message and exit
+  -v, --verbose         Log detailed information to STDERR.
+  -m, --matches         List files that appear in both directories.
+  -r, --removes         List files that appear only as a descendant of the
+                        first directory.
+  -a, --adds            List files that appear only as a descendant of the
+                        second directory.
+  -c, --colorize        Colorize output.
+  --no-colorize         Force colorizing off. If neither --colorize or --no-
+                        colorize is specified, it will be enabled if a
+                        compatible terminal is detected.
+  --no-summary          Suppress the summary.
+  --max-memory SIZE     Specifies the maximum amount of memory to use when
+                        comparing a set of potentially duplicate files. This
+                        option accepts a byte count. The default is 268435456.
+  --max-buffer-size SIZE
+                        Specifies the maximum size of buffers used when
+                        comparing a set of potentially duplicate files. This
+                        option accepts a byte count. The default is 1048576.
+  --version             show program's version number and exit
 
 If none of -m/--matches, -r/--removes, -a/--adds is specified, all are
 reported.
