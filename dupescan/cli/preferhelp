@@ -14,7 +14,7 @@ In this case 'photo.jpg' is the preferred copy because it has the shortest
 path.
 
 This report can then be used to delete the non-preferred duplicates by saving
-the report to a file and rerunning {script_name} with the --execute option.
+the report to a file and rerunning {script_name} with the --delete option.
 
 A criteria string is a phrase, or a series of phrases, expressing what
 properties of a file should make it the preferred one among a set of

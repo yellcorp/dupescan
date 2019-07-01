@@ -194,10 +194,14 @@ class FileEntry(os.PathLike):
         if self._splitext is None:
             self._splitext = os.path.splitext(self._resource.name)
         return self._splitext[1]
-    
+
+    @property
+    def stat(self):
+        return self._resource.stat()
+
     @property
     def size(self):
-        return self._resource.stat().st_size
+        return self.stat.st_size
 
     @property
     def atime(self):
@@ -222,6 +226,14 @@ class FileEntry(os.PathLike):
     @property
     def is_symlink(self):
         return self._resource.is_symlink()
+
+    @property
+    def inode(self):
+        return self._resource.inode()
+
+    @property
+    def dev(self):
+        return self._resource.stat(follow_symlinks=False).st_dev
 
     @property
     def uid(self):
