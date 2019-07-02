@@ -581,14 +581,20 @@ class HardLinker(object):
         representative = None
 
         for entry in entries:
-            if entry.is_symlink or not entry.is_file:
+            try:
+                if entry.is_symlink or not entry.is_file:
+                    continue
+                if representative is None:
+                    representative = entry
+                link_key = self._hardlink_key(entry)
+                linkables[link_key].append(entry)
+                sizes[entry.size].append(entry)
+                candidate_count += 1
+            except OSError:
+                print('Could not index {!r}'.format(entry), file=sys.stderr)
+                x_type, x_value, x_tb = sys.exc_info()
+                traceback.print_exception(x_type, x_value, None, file=sys.stderr)
                 continue
-            if representative is None:
-                representative = entry
-            link_key = self._hardlink_key(entry)
-            linkables[link_key].append(entry)
-            sizes[entry.size].append(entry)
-            candidate_count += 1
 
         if len(sizes) > 1:
             print(
