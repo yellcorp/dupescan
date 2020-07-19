@@ -1,17 +1,16 @@
 import os
 import stat
+from typing import Union, Optional, AnyStr, Iterator
 
-from dupescan.fs._root import NO_ROOT
+from ._root import NO_ROOT, Root
+from ..types import AnyPath
 
 
 class PathAdapter(object):
     """A recreation of os.DirEntry which can be constructed from a path"""
     def __init__(self, path):
-        if isinstance(path, (bytes, str)):
-            self.path = path
-            self.dirname, self.name = os.path.split(self.path)
-        elif isinstance(path, os.PathLike):
-            self.path = path.__fspath__()
+        if isinstance(path, (bytes, str, os.PathLike)):
+            self.path = os.fspath(path)
             self.dirname, self.name = os.path.split(self.path)
         else:
             self.dirname, self.name = path
@@ -50,6 +49,9 @@ class PathAdapter(object):
         return result
 
 
+DirEntryLike = Union[os.DirEntry, PathAdapter]
+
+
 # Like pathlib.Path, but because the needs of this app are a little beyond what
 # it provides, and it's hard (impossible?) to subclass, this is a partial
 # rewrite of what we need with extra bits added on. It benefits from the
@@ -57,24 +59,21 @@ class PathAdapter(object):
 # Otherwise it can be constructed with a plain old path as well. Use the
 # classmethods from_* to create instances.
 class FileEntry(os.PathLike):
-    def __init__(self, dirname, resource, root=NO_ROOT):
+    def __init__(self, dirname: AnyPath, resource: DirEntryLike, root=NO_ROOT):
         if not isinstance(resource, (os.DirEntry, PathAdapter)):
             raise TypeError("resource must be an instance of os.DirEntry or PathAdapter")
 
-        if isinstance(dirname, os.PathLike):
-            self._dirname = dirname.__fspath__()
-        else:
-            self._dirname = dirname
+        self._dirname = os.fspath(dirname)
         self._resource = resource
 
-        self._splitext = None
-        self._root = NO_ROOT if root is None else root
-        self._parent = None
+        self._splitext: Optional[AnyStr] = None
+        self._root: Root = NO_ROOT if root is None else root
+        self._parent: Optional['FileEntry'] = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         return str(self._resource.path)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "%s(%r, %r, %r)" % (
             type(self).__name__,
             self._dirname,
@@ -82,7 +81,7 @@ class FileEntry(os.PathLike):
             self._root
         )
 
-    def __fspath__(self):
+    def __fspath__(self) -> AnyStr:
         return self._resource.path
 
     def __hash__(self):
@@ -92,7 +91,7 @@ class FileEntry(os.PathLike):
             hash(self._root)
         )
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if not isinstance(other, FileEntry):
             return NotImplemented
 
@@ -102,39 +101,38 @@ class FileEntry(os.PathLike):
             self._root == other._root
         )
 
-    def _copy_with_path(self, path):
+    def _copy_with_path(self, path) -> 'FileEntry':
         return FileEntry.from_path(path, self._root)
 
     @classmethod
-    def from_path(cls, path, root=NO_ROOT):
+    def from_path(cls, path, root=NO_ROOT) -> 'FileEntry':
         resource = PathAdapter(path)
         return cls(resource.dirname, resource, root)
 
     @classmethod
-    def from_dir_and_name(cls, parent, name, root=NO_ROOT):
+    def from_dir_and_name(cls, parent, name, root=NO_ROOT) -> 'FileEntry':
         return cls(parent, PathAdapter((parent, name)), root)
 
     @classmethod
-    def from_dir_entry(cls, parent, entry, root=NO_ROOT):
+    def from_dir_entry(cls, parent, entry, root=NO_ROOT) -> 'FileEntry':
         return cls(parent, entry, root)
 
     @property
-    def path(self):
+    def path(self) -> AnyStr:
         return self._resource.path
 
     @property
-    def root(self):
+    def root(self) -> Root:
         return self._root
 
     @property
-    def parent(self):
+    def parent(self) -> 'FileEntry':
         if self._parent is None:
             self._parent = self._copy_with_path(self._dirname)
         return self._parent
 
-    def join(self, name):
-        if isinstance(name, os.PathLike):
-            name = name.__fspath__()
+    def join(self, name: AnyPath) -> 'FileEntry':
+        name = os.fspath(name)
 
         joined = self._copy_with_path(os.path.join(self._resource.path, name))
 
@@ -149,7 +147,7 @@ class FileEntry(os.PathLike):
             joined._parent = self
         return joined
 
-    def scandir(self):
+    def dir_content(self) -> Iterator['FileEntry']:
         with os.scandir(self._resource.path) as entries:
             for entry in entries:
                 child_obj = FileEntry.from_dir_entry(
@@ -160,43 +158,36 @@ class FileEntry(os.PathLike):
                 child_obj._parent = self
                 yield child_obj
 
-    def __truediv__(self, rhs):
+    def __truediv__(self, rhs) -> 'FileEntry':
         if isinstance(rhs, (str, bytes, os.PathLike)):
             return self.join(rhs)
         return NotImplemented
 
-    def __rtruediv__(self, lhs):
-        if isinstance(lhs, os.PathLike):
-            base = lhs.__fspath__()
-        elif isinstance(lhs, (str, bytes)):
-            base = lhs
-        else:
-            return NotImplemented
-
-        return self._copy_with_path(os.path.join(base, self._resource.path))
+    def __rtruediv__(self, lhs) -> 'FileEntry':
+        return self._copy_with_path(os.path.join(os.fspath(lhs), self._resource.path))
 
     @property
-    def basename(self):
+    def basename(self) -> AnyStr:
         return self._resource.name
 
     @property
-    def dirname(self):
+    def dirname(self) -> AnyStr:
         return self._dirname
 
     @property
-    def barename(self):
+    def barename(self) -> AnyStr:
         if self._splitext is None:
             self._splitext = os.path.splitext(self._resource.name)
         return self._splitext[0]
     
     @property
-    def extension(self):
+    def extension(self) -> AnyStr:
         if self._splitext is None:
             self._splitext = os.path.splitext(self._resource.name)
         return self._splitext[1]
 
     @property
-    def stat(self):
+    def stat(self) -> os.stat_result:
         return self._resource.stat()
 
     @property
@@ -216,15 +207,15 @@ class FileEntry(os.PathLike):
         return self._resource.stat().st_mtime
 
     @property
-    def is_file(self):
+    def is_file(self) -> bool:
         return self._resource.is_file()
 
     @property
-    def is_dir(self):
+    def is_dir(self) -> bool:
         return self._resource.is_dir()
 
     @property
-    def is_symlink(self):
+    def is_symlink(self) -> bool:
         return self._resource.is_symlink()
 
     @property

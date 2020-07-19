@@ -4,6 +4,7 @@ import sys
 import time
 import traceback
 from collections import defaultdict
+from typing import Optional, Iterable, Iterator
 
 from dupescan import (
     console,
@@ -16,6 +17,7 @@ from dupescan import (
     units,
 )
 from dupescan.cli._common import add_common_cli_args, set_encoder_errors
+from dupescan.types import AnyPath
 
 
 __all__ = ("delete_unmarked_in_report", "scan", "run")
@@ -279,11 +281,11 @@ class ScanConfig(object):
         self.log_time = False
 
 
-def scan(paths, config=None):
+def scan(paths: Iterable[AnyPath], config: Optional[ScanConfig]=None):
     """Run a duplicate scan and generate a report.
 
     Args:
-        paths (iterable of str): The set of files and/or top-level directories
+        paths (iterable of Path): The set of files and/or top-level directories
             to search for duplicates.
 
         config (ScanConfig): A ScanConfig instance that configures various
@@ -334,7 +336,13 @@ def scan(paths, config=None):
         print("# Elapsed time: %s" % units.format_duration(time.time() - start_time))
 
 
-def create_file_iterator(paths, logger=None, recurse=False, min_file_size=1, include_symlinks=False):
+def create_file_iterator(
+        paths: Iterable[AnyPath],
+        logger=None,
+        recurse=False,
+        min_file_size=1,
+        include_symlinks=False
+) -> Iterator[fs.FileEntry]:
     if logger is not None:
         def onerror(env_error):
             logger.error(str(env_error))

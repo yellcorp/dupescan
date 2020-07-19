@@ -5,6 +5,7 @@ import os
 import sqlite3
 import sys
 import tempfile
+from typing import Iterable, Iterator, Tuple, List
 
 from dupescan import (
     fs,
@@ -145,7 +146,7 @@ class DuplicateFinder(object):
         else:
             self._on_error = noop
 
-    def __call__(self, entries):
+    def __call__(self, entries: Iterable[fs.FileEntry]):
         """Examine a set of files for duplicate content.
 
         Args:
@@ -165,11 +166,11 @@ class DuplicateFinder(object):
         else:
             self._logger.error("{path!s}: {error!s}", path=path, error=error)
 
-    def _collect_size_sets(self, entries):
+    def _collect_size_sets(self, entries: Iterable[fs.FileEntry]) -> Iterator[Tuple[int, List[fs.FileInstance]]]:
         stats = dict(files=0, errors=0)
         last_files_callback = -WALK_CALLBACK_FREQUENCY
 
-        indexer = DatabaseIndexer()
+        indexer = DatabaseIndexer(self._logger)
 
         self._logger.debug("Start file enumeration")
         for entry in entries:
@@ -195,7 +196,7 @@ class DuplicateFinder(object):
 
         return indexer.sets()
 
-    def _compare_content_in_size_set(self, instance_iter):
+    def _compare_content_in_size_set(self, instance_iter: Iterable[fs.FileInstance]):
         stats = dict(bytes_read=0, completed=0, early_out=0, canceled=0)
         last_progress = 0
 
@@ -207,7 +208,7 @@ class DuplicateFinder(object):
         ]
         file_size = initial_set[0].instance.entry.size
 
-        current_sets = [ initial_set ]
+        current_sets: List[List[InstanceStreamPair]] = [ initial_set ]
         self._do_compare_progress_callback(current_sets, 0, file_size)
 
         first = True
@@ -381,7 +382,7 @@ class DuplicateInstanceSet(tuple):
         return sum(len(instance.entries) for instance in self)
 
     @classmethod
-    def _from_is_pairs(cls, is_iter):
+    def _from_is_pairs(cls, is_iter: Iterable['InstanceStreamPair']):
         return cls(is_pair.instance for is_pair in is_iter)
 
 
@@ -413,7 +414,9 @@ def fetch_iterator(sqlite_cursor):
 
 DB_COMMIT_FREQ = 0x4000
 class DatabaseIndexer(object):
-    def __init__(self):
+    def __init__(self, logger):
+        self._logger = logger
+
         self._dir = tempfile.mkdtemp()
         self._path = os.path.join(self._dir, "dupescanindex")
         atexit.register(self.dispose)
@@ -469,7 +472,7 @@ class DatabaseIndexer(object):
     def __del__(self):
         self.dispose()
 
-    def add(self, entry):
+    def add(self, entry: fs.FileEntry):
         cursor = self._conn.cursor()
         
         if entry.root.index is not None:
@@ -489,7 +492,7 @@ class DatabaseIndexer(object):
         self._counter = 0
         self._conn.commit()
 
-    def sets(self):
+    def sets(self) -> Iterator[Tuple[int, List[fs.FileInstance]]]:
         self.end()
 
         unique_cursor = self._conn.cursor()

@@ -1,5 +1,8 @@
 import collections
 import itertools
+from typing import Iterator, Iterable, Dict, Hashable, List, Optional
+
+from dupescan.fs import FileEntry
 
 
 class FileInstance(object):
@@ -43,12 +46,12 @@ class FileInstance(object):
         )
 
     @property
-    def entry(self):
+    def entry(self) -> Optional[FileEntry]:
         return self.entries[0] if len(self.entries) > 0 else None
 
     @classmethod
-    def group_entries_by_identifier(cls, entries):
-        groups = collections.defaultdict(list)
+    def group_entries_by_identifier(cls, entries: Iterable[FileEntry]) -> Iterator['FileInstance']:
+        groups: Dict[Hashable, List[FileEntry]] = collections.defaultdict(list)
         for entry in entries:
             groups[entry.uid].append(entry)
 
