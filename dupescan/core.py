@@ -520,7 +520,34 @@ class DatabaseIndexer(object):
 
             set_cursor.close()
 
-            yield size, list(fs.FileInstance.group_entries_by_identifier(entries))
+            # The following check is an incomplete implementation of a prudent
+            # idea - that files haven't changed their size since they were
+            # enumerated. But this is motivated by a quick fix for a weird bug
+            # present in both Python 3.8.2 and 3.8.4:
+            #
+            # os.DirEntry.is_symlink() can return False incorrectly under the
+            # following conditions:
+            # - OS is MacOS 10.15.5
+            # - The os.DirEntry refers to a symlink on a network volume
+            #   mounted via SMB3
+
+            # os.path.islink(path) correctly returns True
+
+            validated_entries = []
+            for entry in entries:
+                try:
+                    if entry.size == size:
+                        validated_entries.append(entry)
+                    else:
+                        self._logger.warning(
+                            "{!s}: File size has changed since it was enumerated. Was {}, is now {}",
+                            entry.path, size, entry.size
+                        )
+                except EnvironmentError as env_error:
+                    self._logger.error("{path!s}: Validation error: {error!s}", path=entry.path, error=env_error)
+
+            if len(validated_entries) > 1:
+                yield size, list(fs.FileInstance.group_entries_by_identifier(validated_entries))
 
         unique_cursor.close()
 
