@@ -85,11 +85,16 @@ def get_arg_parser():
                 duplicates can be deleted by passing the generated report to
                 the -x/--delete option."""
     )
-    
-    #p.add_argument("-i", "--ignore",
-    #    metavar="NAME",
-    #    help="""Ignore files or directories matching NAME""" ...todo
-    #)
+
+    p.add_argument("--exclude",
+       action="append",
+       metavar="NAME",
+       help="""Excludes files or directories with the given name. This feature
+               is is currently simplified - it only performs case-sensitive
+               literal comparisons against a filename - i.e. the last segment
+               of the file path. At some point it will be expanded to something
+               more like rsync/tar matching."""
+    )
 
     p.add_argument("--time",
         action="store_true",
@@ -188,6 +193,7 @@ def run(argv=None):
             args.prefer,
             args.time,
             args.progress,
+            args.exclude,
         )):
             print("Only -n/--dry-run can be used with -x/--delete or -c/--coalesce. All other options must be omitted.", file=sys.stderr)
             return 1
@@ -228,6 +234,9 @@ def run(argv=None):
         config.max_buffer_size = args.max_buffer_size
         config.log_time = args.time
 
+        if (args.exclude):
+            config.exclude.extend(args.exclude)
+
         scan(args.paths, config)
 
         return 0
@@ -267,6 +276,8 @@ class ScanConfig(object):
 
         log_time (bool): If True, record the amount of time taken and append it
             to the report.
+
+        exclude (List[str]): List of names to exclude.
     """
     def __init__(self):
         self.recurse = False
@@ -279,6 +290,7 @@ class ScanConfig(object):
         self.max_buffer_size = 0
         self.max_memory = 0
         self.log_time = False
+        self.exclude = []
 
 
 def scan(paths: Iterable[AnyPath], config: Optional[ScanConfig]=None):
@@ -299,7 +311,14 @@ def scan(paths: Iterable[AnyPath], config: Optional[ScanConfig]=None):
         min_level = log.DEBUG if config.verbose else log.INFO,
     )
 
-    entries = create_file_iterator(paths, logger, config.recurse, config.min_file_size, config.include_symlinks)
+    entries = create_file_iterator(
+        paths,
+        logger,
+        config.recurse,
+        config.exclude,
+        config.min_file_size,
+        config.include_symlinks
+    )
     reporter = create_reporter(config.prefer)
 
     if config.progress:
@@ -312,7 +331,7 @@ def scan(paths: Iterable[AnyPath], config: Optional[ScanConfig]=None):
             glyphs = use_unicode,
             stream = sys.stderr,
         )
-        
+
         walk_progress_handler = WalkProgressHandler(stream=sys.stderr)
     else:
         walk_progress_handler = None
@@ -340,6 +359,7 @@ def create_file_iterator(
         paths: Iterable[AnyPath],
         logger=None,
         recurse=False,
+        exclude: Optional[Iterable[str]]=None,
         min_file_size=1,
         include_symlinks=False
 ) -> Iterator[fs.FileEntry]:
@@ -355,6 +375,11 @@ def create_file_iterator(
         else fs.flat_iterator
     )
 
+    name_filter = None
+    if exclude:
+        exclude_set = frozenset(exclude)
+        name_filter = lambda e: e.basename not in exclude_set
+
     file_size_filter = None
     if min_file_size > 0:
         file_size_filter = lambda e: e.size >= min_file_size
@@ -363,8 +388,8 @@ def create_file_iterator(
     if not include_symlinks:
         symlink_filter = lambda e: not e.is_symlink
 
-    file_filter = funcutil.and_of(symlink_filter, file_size_filter)
-    dir_filter = None
+    file_filter = funcutil.and_of(name_filter, funcutil.and_of(symlink_filter, file_size_filter))
+    dir_filter = name_filter
 
     return ifunc(paths, dir_filter, file_filter, onerror)
 
