@@ -184,7 +184,6 @@ def run(argv=None):
             args.min_size,
             args.prefer,
             args.time,
-            args.progress,
             args.exclude,
         )):
             print("Only -n/--dry-run can be used with -x/--delete or -c/--coalesce. All other options must be omitted.", file=sys.stderr)
