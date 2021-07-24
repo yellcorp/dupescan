@@ -36,8 +36,8 @@ def get_arg_parser():
     p.add_argument("paths",
         nargs="*",
         metavar="PATH",
-        help="""List of files to consider. Specify --recurse (-r) to also
-                consider the contents of directories."""
+        help="""List of files to consider. Directories will be recursively
+                examined."""
     )
 
     p.add_argument("-s", "--symlinks",
@@ -52,22 +52,14 @@ def get_arg_parser():
                 --min-size 0"""
     )
 
-    p.add_argument("-r", "--recurse",
-        action="store_true",
-        help="""Recurse into subdirectories."""
-    )
-
     p.add_argument("-o", "--only-mixed-roots",
         action="store_true",
         help="""Only show duplicate files if they arise from recursing into
                 different root directories. This can speed operations if the
                 only results of interest are whether duplicates exist between
                 different filesystem hierarchies, rather than within a single
-                one. Note that this only has a useful effect if -r/--recurse
-                is specified and two or more paths are provided. If -r/--recurse
-                is not specified, this option has no effect. If -r/--recurse
-                is specified with only one path, no output will be
-                produced."""
+                one. Note that this only has a useful effect if two or more
+                paths are provided."""
     )
 
     p.add_argument("-m", "--min-size",
@@ -111,9 +103,10 @@ def get_arg_parser():
         help="""Log detailed information to STDERR."""
     )
 
-    p.add_argument("--progress",
-        action="store_true",
-        help="""Show progress bars on STDERR."""
+    p.add_argument("--no-progress",
+        dest="progress",
+        action="store_false",
+        help="""Don't show progress bars on STDERR."""
     )
 
     p.add_argument("-x", "--delete",
@@ -187,7 +180,6 @@ def run(argv=None):
             args.paths,
             args.symlinks,
             args.zero,
-            args.recurse,
             args.only_mixed_roots,
             args.min_size,
             args.prefer,
@@ -224,7 +216,7 @@ def run(argv=None):
             print("No paths specified", file=sys.stderr)
             return 1
 
-        config.recurse = args.recurse
+        config.recurse = True
         config.only_mixed_roots = args.only_mixed_roots
         config.include_symlinks = args.symlinks
         config.prefer = args.prefer
@@ -234,8 +226,11 @@ def run(argv=None):
         config.max_buffer_size = args.max_buffer_size
         config.log_time = args.time
 
-        if (args.exclude):
+        if args.exclude:
             config.exclude.extend(args.exclude)
+
+        if config.only_mixed_roots and len(args.paths) <= 1:
+            print("Warning: -o/--only-mixed-roots with a single path will not produce any results.", file=sys.stderr)
 
         scan(args.paths, config)
 

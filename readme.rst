@@ -18,16 +18,17 @@ finddupes
 ~~~~~~~~~
 
 
-usage: finddupes [-h] [-s] [-z] [-r] [-o] [-m SIZE] [-p CRITERIA] [--time]
-                 [--help-prefer] [-v] [--progress] [-x PATH] [-c PATH] [-n]
-                 [--max-memory SIZE] [--max-buffer-size SIZE] [--version]
-                 [PATH [PATH ...]]
+usage: finddupes [-h] [-s] [-z] [-o] [-m SIZE] [-p CRITERIA] [--exclude NAME]
+                 [--time] [--help-prefer] [-v] [--no-progress] [-x PATH]
+                 [-c PATH] [-n] [--max-memory SIZE] [--max-buffer-size SIZE]
+                 [--version]
+                 [PATH ...]
 
 Find files with identical content.
 
 positional arguments:
-  PATH                  List of files to consider. Specify --recurse (-r) to
-                        also consider the contents of directories.
+  PATH                  List of files to consider. Directories will be
+                        recursively examined.
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -35,18 +36,14 @@ optional arguments:
   -z, --zero            Include zero-length files. All zero-length files are
                         considered to have identical content. This option is
                         equivalent to --min-size 0
-  -r, --recurse         Recurse into subdirectories.
   -o, --only-mixed-roots
                         Only show duplicate files if they arise from recursing
                         into different root directories. This can speed
                         operations if the only results of interest are whether
                         duplicates exist between different filesystem
                         hierarchies, rather than within a single one. Note
-                        that this only has a useful effect if -r/--recurse is
-                        specified and two or more paths are provided. If
-                        -r/--recurse is not specified, this option has no
-                        effect. If -r/--recurse is specified with only one
-                        path, no output will be produced.
+                        that this only has a useful effect if two or more
+                        paths are provided.
   -m SIZE, --min-size SIZE
                         Ignore files smaller than SIZE. This option accepts a
                         byte count. The default is 1.
@@ -55,10 +52,16 @@ optional arguments:
                         one for preservation according to the provided
                         criteria. Other duplicates can be deleted by passing
                         the generated report to the -x/--delete option.
+  --exclude NAME        Excludes files or directories with the given name.
+                        This feature is is currently simplified - it only
+                        performs case-sensitive literal comparisons against a
+                        filename - i.e. the last segment of the file path. At
+                        some point it will be expanded to something more like
+                        rsync/tar matching.
   --time                Add elasped time to the generated report.
   --help-prefer         Display detailed help on using the --prefer option
   -v, --verbose         Log detailed information to STDERR.
-  --progress            Show progress bars on STDERR.
+  --no-progress         Don't show progress bars on STDERR.
   -x PATH, --delete PATH
                         Delete unmarked files in the report at PATH. Sets
                         where no files are marked will be skipped.
@@ -66,9 +69,9 @@ optional arguments:
                         Replace duplicate files with hard links, using sets
                         found in the report at PATH. File marks are ignored -
                         all filenames are preserved.
-  -n, --dry-run         Used in combination with -x/--delete. List actions
-                        that --delete would perform without actually doing
-                        them.
+  -n, --dry-run         Used in combination with -x/--delete or -c/--coalesce.
+                        List actions that those options would perform without
+                        actually doing them.
   --max-memory SIZE     Specifies the maximum amount of memory to use when
                         comparing a set of potentially duplicate files. This
                         option accepts a byte count. The default is 268435456.
@@ -102,7 +105,7 @@ In this case 'photo.jpg' is the preferred copy because it has the shortest
 path.
 
 This report can then be used to delete the non-preferred duplicates by saving
-the report to a file and rerunning finddupes with the --execute option.
+the report to a file and rerunning finddupes with the --delete option.
 
 A criteria string is a phrase, or a series of phrases, expressing what
 properties of a file should make it the preferred one among a set of
@@ -185,15 +188,14 @@ PROPERTY  : path
             The file's modification time.
 
           | index
-			The position of the file on the command line, or the file's
-			ancestor directory if --recurse was used. The first file/directory
-			has an index of 1.
+            The position of the file, or its ancestor directory, on the
+            command line. The first file/directory has an index of 1.
 
 OPERATOR  : is
-			Prefer strings/numbers that are equal to the argument.
+            Prefer strings/numbers that are equal to the argument.
 
           | is not
-			Prefer strings/numbers that are not equal to the argument.
+            Prefer strings/numbers that are not equal to the argument.
 
           | contains
             Prefer strings that contain the argument.
@@ -237,16 +239,16 @@ ADJECTIVE : shorter
             Prefer strings containing more directory separators.
 
           | earlier
-		  | lower
+          | lower
             When used with strings: prefer ones that appear earlier when sorted.
             When used with times: prefer earlier ones.
-			When used with numbers: prefer lower ones.
+            When used with numbers: prefer lower ones.
 
           | later
-		  | higher
+          | higher
             When used with strings: prefer ones that appear later when sorted.
             When used with times: prefer later ones.
-			When used with numbers: prefer higher ones.
+            When used with numbers: prefer higher ones.
 
 ARGUMENT  : BARE_STRING
             A sequence of characters terminated by the first unescaped space.

@@ -97,9 +97,8 @@ PROPERTY  : path
             The file's modification time.
 
           | index
-            The position of the file on the command line, or the file's
-            ancestor directory if --recurse was used. The first file/directory
-            has an index of 1.
+            The position of the file, or its ancestor directory, on the
+            command line. The first file/directory has an index of 1.
 
 OPERATOR  : is
             Prefer strings/numbers that are equal to the argument.
