@@ -90,7 +90,7 @@ def get_arg_parser():
 
     p.add_argument("--time",
         action="store_true",
-        help="""Add elasped time to the generated report."""
+        help="""Add elapsed time to the generated report."""
     )
 
     p.add_argument("--help-prefer",
