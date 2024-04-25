@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dupescan"
-version = "0.0.43.dev0"
+version = "0.0.43"
 description = "Library and command-line utilities to detect duplicate files by content."
 license = "MIT"
 authors = ["Jim Boswell <jimb@yellcorp.org>"]
