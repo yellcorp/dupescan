@@ -1,0 +1,29 @@
+[tool.poetry]
+name = "dupescan"
+version = "0.0.43.dev0"
+description = "Library and command-line utilities to detect duplicate files by content."
+license = "MIT"
+authors = ["Jim Boswell <jimb@yellcorp.org>"]
+readme = "readme.rst"
+repository = "https://github.com/yellcorp/dupescan"
+classifiers = [
+    'Environment :: Console',
+    'Intended Audience :: Developers',
+    'Intended Audience :: End Users/Desktop',
+    'Operating System :: POSIX :: Linux',
+    'Operating System :: MacOS :: MacOS X',
+    'Topic :: Utilities'
+]
+include = ["dupescan/cli/preferhelp"]
+
+[tool.poetry.scripts]
+correlate = "dupescan.cli.correlate:main"
+finddupes = "dupescan.cli.finddupes:main"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
